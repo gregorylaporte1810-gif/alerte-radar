@@ -221,9 +221,9 @@ function demarrerGPS() {
         }
       },
       {
-        enableHighAccuracy: false,
-        maximumAge: 10000,
-        timeout: 30000,
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
       },
     );
   }
