@@ -1,3 +1,23 @@
+// --- ANTI-VEILLE ÉCRAN ---
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('Verrouillage d\'écran actif (anti-veille)');
+    }
+  } catch (err) {
+    console.log(`Erreur Wake Lock: ${err.name}, ${err.message}`);
+  }
+}
+
+// Réactiver le Wake Lock si l'utilisateur revient sur l'onglet
+document.addEventListener('visibilitychange', async () => {
+  if (wakeLock !== null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
 const GIST_URL =
   "https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json";
@@ -96,6 +116,10 @@ if (btnStart) {
     if (audioCtx.state === "suspended") {
       audioCtx.resume();
     }
+    
+    // Active l'anti-veille écran ici
+    requestWakeLock();
+
     this.style.display = "none";
     demarrerGPS();
   });
