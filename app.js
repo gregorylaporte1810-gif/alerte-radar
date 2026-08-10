@@ -1,24 +1,17 @@
-// --- 1. CONFIGURATION INITIALE & SIMULATION DE RADARS ---
-const radarsDatabase = [
-  {
-    id: 1,
-    lat: 48.8566,
-    lon: 2.3522,
-    vitesseLimite: 50,
-    nom: "Radar Test Paris 1",
-  },
-];
-
-const SEUIL_ALERTE_METRES = 500;
+// --- 1. CONFIGURATION & ÉTAT GLOBAL ---
+const GIST_URL = 'https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json';
 
 let map;
 let userMarker;
 let radarMarkers = [];
+let radarsDatabase = [];
 let audioCtx;
+let dernierBipTime = 0;
 
+// Initialisation de la carte Leaflet
 function initMap(lat = 46.603354, lon = 1.888334) {
   const mapContainer = document.getElementById("map");
-  if (!mapContainer) return; // Sécurité si la div map n'existe pas
+  if (!mapContainer) return;
 
   map = L.map("map").setView([lat, lon], 13);
 
@@ -27,15 +20,24 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
-  radarsDatabase.forEach((radar) => {
-    const marker = L.marker([radar.lat, radar.lon])
-      .addTo(map)
-      .bindPopup(`<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`);
-    radarMarkers.push(marker);
-  });
+  // Charger les radars depuis le Gist GitHub
+  fetch(GIST_URL)
+    .then((response) => response.json())
+    .then((data) => {
+      radarsDatabase = data;
+      console.log('Radars chargés avec succès :', data.length);
+      
+      // Ajouter les marqueurs sur la carte
+      radarsDatabase.forEach((radar) => {
+        const marker = L.marker([radar.lat, radar.lon])
+          .addTo(map)
+          .bindPopup(`<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`);
+        radarMarkers.push(marker);
+      });
+    })
+    .catch((error) => console.error('Erreur chargement radars :', error));
 }
 
-// Initialisation de la carte au chargement
 window.addEventListener("DOMContentLoaded", () => {
   initMap();
 });
@@ -77,7 +79,20 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// --- 4. INITIALISATION PAR L'UTILISATEUR ---
+// --- 4. GESTION DES COULEURS D'ALERTE (Modèle React) ---
+function mettreAJourCouleurAlerte(distance) {
+  const headerEl = document.querySelector(".app-container header") || document.body;
+  // Adaptation dynamique de la couleur selon la distance (identique au React)
+  if (distance <= 500) {
+    headerEl.style.backgroundColor = '#e74c3c'; // Rouge
+  } else if (distance <= 1000) {
+    headerEl.style.backgroundColor = '#e67e22'; // Orange
+  } else {
+    headerEl.style.backgroundColor = '#27ae60'; // Vert
+  }
+}
+
+// --- 5. INITIALISATION PAR L'UTILISATEUR ---
 const btnStart = document.getElementById("btn-start");
 if (btnStart) {
   btnStart.addEventListener("click", function () {
@@ -92,7 +107,7 @@ if (btnStart) {
   });
 }
 
-// --- 5. SUIVI GPS TEMPS RÉEL ---
+// --- 6. SUIVI GPS TEMPS RÉEL ---
 function demarrerGPS() {
   const statusBadge = document.getElementById("gps-status");
   const currentSpeedEl = document.getElementById("current-speed");
@@ -101,12 +116,11 @@ function demarrerGPS() {
   const alertText = document.getElementById("alert-text");
 
   let isFirstPosition = true;
-  let dernierBipTime = 0;
 
   if ("geolocation" in navigator) {
     if (statusBadge) {
-      statusBadge.textContent = "Recherche GPS...";
-      statusBadge.className = "status-badge";
+      statusBadge.textContent = "GPS Actif";
+      statusBadge.className = "status-badge actif";
     }
 
     navigator.geolocation.watchPosition(
@@ -115,10 +129,6 @@ function demarrerGPS() {
         const vitesseKmH = speed ? Math.round(speed * 3.6) : 0;
 
         if (currentSpeedEl) currentSpeedEl.innerHTML = `${vitesseKmH} <small>km/h</small>`;
-        if (statusBadge) {
-          statusBadge.textContent = "GPS Actif";
-          statusBadge.className = "status-badge actif";
-        }
 
         if (isFirstPosition && map) {
           map.setView([latitude, longitude], 15);
@@ -138,29 +148,29 @@ function demarrerGPS() {
           }
         }
 
-        let plusProcheDistance = Infinity;
-        let radarConcerne = null;
+        if (radarsDatabase.length > 0) {
+          let plusProcheDistance = 999999;
+          let radarConcerne = { nom: 'Aucun', vitesseLimite: '--' };
 
-        radarsDatabase.forEach((radar) => {
-          const distance = calculerDistance(
-            latitude,
-            longitude,
-            radar.lat,
-            radar.lon,
-          );
-          if (distance < plusProcheDistance) {
-            plusProcheDistance = distance;
-            radarConcerne = radar;
-          }
-        });
+          radarsDatabase.forEach((radar) => {
+            const distance = calculerDistance(latitude, longitude, radar.lat, radar.lon);
+            if (distance < plusProcheDistance) {
+              plusProcheDistance = distance;
+              radarConcerne = radar;
+            }
+          });
 
-        if (plusProcheDistance !== Infinity) {
           const distanceArrondie = Math.round(plusProcheDistance);
-          if (nextCameraDistEl) nextCameraDistEl.innerHTML = `${distanceArrondie} <small>m</small>`;
+          if (nextCameraDistEl) {
+            nextCameraDistEl.innerHTML = `${distanceArrondie} <small>m</small>`;
+          }
 
-          if (distanceArrondie <= SEUIL_ALERTE_METRES) {
+          // Mise à jour de la couleur d'alerte selon les seuils du modèle React
+          mettreAJourCouleurAlerte(distanceArrondie);
+
+          if (distanceArrondie <= 500) {
             if (alertBanner) alertBanner.classList.remove("hidden");
-            if (alertText) alertText.textContent = `⚠️ Zone de contrôle à ${distanceArrondie}m (Lim. ${radarConcerne.vitesseLimite} km/h)`;
+            if (alertText) alertText.textContent = `⚠️ ${radarConcerne.nom} à ${distanceArrondie}m (Lim. ${radarConcerne.vitesseLimite} km/h)`;
 
             const maintenant = Date.now();
             if (maintenant - dernierBipTime > 2000) {
