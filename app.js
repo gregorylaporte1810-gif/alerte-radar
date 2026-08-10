@@ -1,4 +1,3 @@
-
 // --- ANTI-VEILLE ÉCRAN ---
 let wakeLock = null;
 async function requestWakeLock() {
