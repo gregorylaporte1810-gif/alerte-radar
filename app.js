@@ -20,7 +20,7 @@ document.addEventListener('visibilitychange', async () => {
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
 const GIST_URL =
-  "https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json";
+  "https://gist.githubusercontent.com/gregorylaporte1810-gif/9b4eeb6c715a0bcde5644ad236d8d3f9/raw/7bb5e292d96fa0c1163cd005ea70ef8ebc0a1cc0/radars.json";
 
 let map;
 let userMarker;
