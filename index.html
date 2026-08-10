@@ -1,48 +1,49 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
-  <meta charset="UTF-8">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Alerte Radar</title>
-  <!-- Intégration de Leaflet.js pour la carten-->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerte Radar Live</title>
+    <!-- CSS Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+
   <div class="app-container">
-    <button id="btn-start" class="btn-start">Activer la navigation et le son</button>
-    <header>
-      <h1>Alerte Radar Live</h1>
-      <div id="gps-status" class="status-badge" recherche>Recherche GPS...</div>
+    <!-- En-tête dynamique (qui changera de couleur selon l'alerte) -->
+    <header id="main-header">
+      <div class="header-top">
+        <h1>Alerte Radar Live</h1>
+        <span id="gps-status" class="status-badge attente">GPS en attente...</span>
+      </div>
+
+      <!-- Bouton pour démarrer le GPS sur le web -->
+      <button id="btn-start" class="btn-start">Activer le GPS & l'Audio</button>
+
+      <!-- Tableau de bord temps réel (Modèle React) -->
+      <div class="dashboard">
+        <div class="box">
+          <span class="label">Vitesse actuelle</span>
+          <span id="current-speed" class="value">0 <small class="unit">km/h</small></span>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="box">
+          <span id="next-radar-label" class="label">Prochain Radar (-- km/h)</span>
+          <span id="next-camera-dist" class="value">Calcul...</span>
+        </div>
+      </div>
     </header>
 
-    <!-- Tableau de bord temps réel (Modèle React) -->
-    <div class="dashboard">
-      <div class="card">
-        <span class="label">Vitesse actuelle</span>
-        <span id="current-speed" class="value">0 <small class="unit">km/h</small></span>
-      </div>
-      <div class="card">
-        <span id="next-radar-label" class="label">Prochain Radar (-- km/h)</span>
-        <span id="next-camera-dist" class="value">Calcul...</span>
-      </div>
-    </div>
-
-    <!-- Zone d'alerte visuelle -->
-    <div id="alert-banner" class="alert-banner hidden">
-      <span id="alert-text">Attention : Contrôle à venir</span>
-    </div>
-
-    <!-- Carte interactive -->
+    <!-- Carte -->
     <div id="map"></div>
   </div>
 
-  <!-- Scripts leaflet et Application -->
+  <!-- JS Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
-
 </html>

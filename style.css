@@ -1,117 +1,100 @@
-* {
-  box-sizing: border-box;
+body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-}
-
-body {
-  background-color: #0f172a;
-  color: #f8fafc;
-  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #0b132b;
+  color: #fff;
 }
 
 .app-container {
-  max-width: 600px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  height: 100vh;
 }
 
+/* Le header qui va changer de couleur (Vert, Orange, Rouge) */
 header {
+  padding: 15px;
+  background-color: #27ae60; /* Vert par défaut */
+  transition: background-color 0.5s ease;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+
+.header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 15px;
 }
 
 h1 {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
+  margin: 0;
 }
 
 .status-badge {
   padding: 4px 10px;
-  border-radius: 9999px;
+  border-radius: 20px;
   font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.status-badge.recherche { background: #eab308; color: #000; }
-.status-badge.actif { background: #22c55e; color: #fff; }
-.status-badge.erreur { background: #ef4444; color: #fff; }
-
-.dashboard {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.card {
-  background: #1a293b;
-  padding: 16px;
-  border-radius: 12px;
-  text-align: center;
-  border: 1px solid #334155;
-}
-
-.card .label {
-  display: block;
-  font-size: 0.85rem;
-  color: #94a3b8;
-  margin-bottom: 6px;
-}
-
-.card .value {
-  font-size: 1.8rem;
-  font-weight: 700;
-}
-
-.card .value small {
-  font-size: 1rem;
-  color: #94a3b8;
-}
-
-/* Bannière d'alerte */
-.alert-banner {
-  background: #ef4444;
-  color: white;
-  padding: 14px;
-  border-radius: 10px;
-  text-align: center;
   font-weight: bold;
-  font-size: 1.1rem;
-  animation: pulse 1s infinite alternate;
+  background: #e74c3c;
+  color: white;
 }
-
-.alert-banner.hidden {
-  display: none;
-}
-
-@keyframes pulse {
-  0% { opacity: 0.8; transform: scale(1); }
-  100% { opacity: 1; transform: scale(1.02); }
-}
-
-/* Carte */
-#map {
-  height: 350px;
-  border-radius: 12px;
-  border: 1px solid #334155;
+.status-badge.actif {
+  background: #27ae60;
 }
 
 .btn-start {
+  width: 100%;
+  padding: 12px;
   background: #3b82f6;
   color: white;
   border: none;
-  padding: 12px;
   border-radius: 8px;
   font-size: 1rem;
-  cursor: pointer;
   font-weight: bold;
+  cursor: pointer;
   margin-bottom: 10px;
-  transition: background 0.2s;
 }
 
-.btn-start:hover {
-  background: #2563eb;
+.dashboard {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.box {
+  align-items: center;
+  flex: 1;
+  text-align: center;
+}
+
+.separator {
+  width: 1px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.label {
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.value {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.unit {
+  font-size: 0.9rem;
+}
+
+#map {
+  flex: 1;
+  width: 100%;
 }

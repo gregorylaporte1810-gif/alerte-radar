@@ -1,5 +1,6 @@
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
-const GIST_URL = 'https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json';
+const GIST_URL =
+  "https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json";
 
 let map;
 let userMarker;
@@ -25,16 +26,18 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     .then((response) => response.json())
     .then((data) => {
       radarsDatabase = data;
-      console.log('Radars chargés avec succès :', data.length);
-      
+      console.log("Radars chargés avec succès :", data.length);
+
       radarsDatabase.forEach((radar) => {
         const marker = L.marker([radar.lat, radar.lon])
           .addTo(map)
-          .bindPopup(`<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`);
+          .bindPopup(
+            `<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`,
+          );
         radarMarkers.push(marker);
       });
     })
-    .catch((error) => console.error('Erreur chargement radars :', error));
+    .catch((error) => console.error("Erreur chargement radars :", error));
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -80,9 +83,9 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
 
 // --- 4. GESTION DES COULEURS (Modèle React) ---
 function getAlertColor(dist) {
-  if (dist <= 500) return '#e74c3c'; // Rouge
-  if (dist <= 1000) return '#e67e22'; // Orange
-  return '#27ae60'; // Vert
+  if (dist <= 500) return "#e74c3c"; // Rouge
+  if (dist <= 1000) return "#e67e22"; // Orange
+  return "#27ae60"; // Vert
 }
 
 // --- 5. INITIALISATION UTILISATEUR ---
@@ -120,7 +123,8 @@ function demarrerGPS() {
         const { latitude, longitude, speed } = position.coords;
         const vitesseKmH = speed ? Math.round(speed * 3.6) : 0;
 
-        if (currentSpeedEl) currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
+        if (currentSpeedEl)
+          currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
 
         if (isFirstPosition && map) {
           map.setView([latitude, longitude], 15);
@@ -142,10 +146,15 @@ function demarrerGPS() {
 
         if (radarsDatabase.length > 0) {
           let plusProcheDistance = 999999;
-          let radarConcerne = { nom: 'Aucun', vitesseLimite: '--' };
+          let radarConcerne = { nom: "Aucun", vitesseLimite: "--" };
 
           radarsDatabase.forEach((radar) => {
-            const distance = calculerDistance(latitude, longitude, radar.lat, radar.lon);
+            const distance = calculerDistance(
+              latitude,
+              longitude,
+              radar.lat,
+              radar.lon,
+            );
             if (distance < plusProcheDistance) {
               plusProcheDistance = distance;
               radarConcerne = radar;
@@ -153,23 +162,27 @@ function demarrerGPS() {
           });
 
           const distanceArrondie = Math.round(plusProcheDistance);
-          
+
           // Mise à jour synchro avec le modèle React (Titre + Vitesse limite entre parenthèses)
           if (nextRadarLabelEl) {
             nextRadarLabelEl.textContent = `Prochain Radar (${radarConcerne.vitesseLimite} km/h)`;
           }
 
           if (nextCameraDistEl) {
-            nextCameraDistEl.textContent = distanceArrondie > 99999 ? 'Calcul...' : `${distanceArrondie} m`;
+            nextCameraDistEl.textContent =
+              distanceArrondie > 99999 ? "Calcul..." : `${distanceArrondie} m`;
           }
 
           // Changement dynamique de la couleur de l'en-tête selon les seuils du TSX
-          const headerEl = document.querySelector(".app-container header") || document.body;
-          headerEl.style.backgroundColor = getAlertColor(distanceArrondie);
+          const headerEl = document.getElementById("main-header");
+          if (headerEl) {
+            headerEl.style.backgroundColor = getAlertColor(distanceArrondie);
+          }
 
           if (distanceArrondie <= 500) {
             if (alertBanner) alertBanner.classList.remove("hidden");
-            if (alertText) alertText.textContent = `⚠️ ${radarConcerne.nom} à ${distanceArrondie}m (Lim. ${radarConcerne.vitesseLimite} km/h)`;
+            if (alertText)
+              alertText.textContent = `⚠️ ${radarConcerne.nom} à ${distanceArrondie}m (Lim. ${radarConcerne.vitesseLimite} km/h)`;
 
             const maintenant = Date.now();
             if (maintenant - dernierBipTime > 2000) {
@@ -192,7 +205,7 @@ function demarrerGPS() {
         enableHighAccuracy: true,
         maximumAge: 0,
         timeout: 20000,
-      }
+      },
     );
   }
 }
