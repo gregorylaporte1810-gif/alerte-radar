@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alerte Radar</title>
+  <!-- Intégration de Leaflet.js pour la carten-->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <button id="btn-start" class="btn-start">Activer la navigation et le son</button>
+    <header>
+      <h1>Alerte Radar Live</h1>
+      <div id="gps-status" class="status-badge" recherche>Recherche GPS...</div>
+    </header>
+
+    <!-- Tableau de bord temps réel-->
+    <div class="dashboard">
+      <div class="card">
+        <span class="label">Vitesse actuelle</span>
+        <span id="current-speed" class="value">0 <small>km/h</small></span>
+      </div>
+      <div class="card">
+        <span class="label">Prochain Radar</span>
+        <span id="next-camera-dist" class="value">-- <small>m</small></span>
+      </div>
+    </div>
+
+    <!-- Zone d'alerte visuelle -->
+    <div id="alert-banner" class="alert-banner hidden">
+      <span id="alert-text">Attention : Contrôle à venir</span>
+    </div>
+
+    <!-- Carte interactive -->
+    <div id="map"></div>
+  </div>
+
+  <!-- Scripts leaflet et Application -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
