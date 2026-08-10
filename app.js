@@ -20,14 +20,13 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
-  // Charger les radars depuis le Gist GitHub
+  // Charger les radars depuis le Gist GitHub (exactement comme dans le .tsx)
   fetch(GIST_URL)
     .then((response) => response.json())
     .then((data) => {
       radarsDatabase = data;
       console.log('Radars chargés avec succès :', data.length);
       
-      // Ajouter les marqueurs sur la carte
       radarsDatabase.forEach((radar) => {
         const marker = L.marker([radar.lat, radar.lon])
           .addTo(map)
@@ -42,7 +41,7 @@ window.addEventListener("DOMContentLoaded", () => {
   initMap();
 });
 
-// --- 2. GESTION DU SON D'ALERTE (Web Audio API) ---
+// --- 2. GESTION DU SON D'ALERTE ---
 function jouerBipAlerte() {
   if (!audioCtx) return;
 
@@ -60,11 +59,11 @@ function jouerBipAlerte() {
     oscillator.start();
     oscillator.stop(audioCtx.currentTime + 0.2);
   } catch (e) {
-    console.log("Erreur lors de la lecture audio :", e);
+    console.log("Erreur audio :", e);
   }
 }
 
-// --- 3. CALCUL DE DISTANCE (Formule de Haversine) ---
+// --- 3. CALCUL DE DISTANCE (Haversine) ---
 function calculerDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3;
   const rad = Math.PI / 180;
@@ -79,29 +78,21 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// --- 4. GESTION DES COULEURS D'ALERTE (Modèle React) ---
-function mettreAJourCouleurAlerte(distance) {
-  const headerEl = document.querySelector(".app-container header") || document.body;
-  // Adaptation dynamique de la couleur selon la distance (identique au React)
-  if (distance <= 500) {
-    headerEl.style.backgroundColor = '#e74c3c'; // Rouge
-  } else if (distance <= 1000) {
-    headerEl.style.backgroundColor = '#e67e22'; // Orange
-  } else {
-    headerEl.style.backgroundColor = '#27ae60'; // Vert
-  }
+// --- 4. GESTION DES COULEURS (Modèle React) ---
+function getAlertColor(dist) {
+  if (dist <= 500) return '#e74c3c'; // Rouge
+  if (dist <= 1000) return '#e67e22'; // Orange
+  return '#27ae60'; // Vert
 }
 
-// --- 5. INITIALISATION PAR L'UTILISATEUR ---
+// --- 5. INITIALISATION UTILISATEUR ---
 const btnStart = document.getElementById("btn-start");
 if (btnStart) {
   btnStart.addEventListener("click", function () {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
     if (audioCtx.state === "suspended") {
       audioCtx.resume();
     }
-
     this.style.display = "none";
     demarrerGPS();
   });
@@ -112,6 +103,7 @@ function demarrerGPS() {
   const statusBadge = document.getElementById("gps-status");
   const currentSpeedEl = document.getElementById("current-speed");
   const nextCameraDistEl = document.getElementById("next-camera-dist");
+  const nextRadarLabelEl = document.getElementById("next-radar-label");
   const alertBanner = document.getElementById("alert-banner");
   const alertText = document.getElementById("alert-text");
 
@@ -128,7 +120,7 @@ function demarrerGPS() {
         const { latitude, longitude, speed } = position.coords;
         const vitesseKmH = speed ? Math.round(speed * 3.6) : 0;
 
-        if (currentSpeedEl) currentSpeedEl.innerHTML = `${vitesseKmH} <small>km/h</small>`;
+        if (currentSpeedEl) currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
 
         if (isFirstPosition && map) {
           map.setView([latitude, longitude], 15);
@@ -161,12 +153,19 @@ function demarrerGPS() {
           });
 
           const distanceArrondie = Math.round(plusProcheDistance);
-          if (nextCameraDistEl) {
-            nextCameraDistEl.innerHTML = `${distanceArrondie} <small>m</small>`;
+          
+          // Mise à jour synchro avec le modèle React (Titre + Vitesse limite entre parenthèses)
+          if (nextRadarLabelEl) {
+            nextRadarLabelEl.textContent = `Prochain Radar (${radarConcerne.vitesseLimite} km/h)`;
           }
 
-          // Mise à jour de la couleur d'alerte selon les seuils du modèle React
-          mettreAJourCouleurAlerte(distanceArrondie);
+          if (nextCameraDistEl) {
+            nextCameraDistEl.textContent = distanceArrondie > 99999 ? 'Calcul...' : `${distanceArrondie} m`;
+          }
+
+          // Changement dynamique de la couleur de l'en-tête selon les seuils du TSX
+          const headerEl = document.querySelector(".app-container header") || document.body;
+          headerEl.style.backgroundColor = getAlertColor(distanceArrondie);
 
           if (distanceArrondie <= 500) {
             if (alertBanner) alertBanner.classList.remove("hidden");
@@ -183,9 +182,9 @@ function demarrerGPS() {
         }
       },
       (error) => {
-        console.warn(`Code d'erreur GPS: ${error.code}, Message: ${error.message}`);
+        console.warn(`Erreur GPS: ${error.message}`);
         if (statusBadge) {
-          statusBadge.textContent = "Erreur GPS (" + error.code + ")";
+          statusBadge.textContent = "Erreur GPS";
           statusBadge.className = "status-badge erreur";
         }
       },
@@ -195,10 +194,5 @@ function demarrerGPS() {
         timeout: 20000,
       }
     );
-  } else {
-    if (statusBadge) {
-      statusBadge.textContent = "GPS non supporté";
-      statusBadge.className = "status-badge erreur";
-    }
   }
 }

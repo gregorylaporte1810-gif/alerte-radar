@@ -19,15 +19,15 @@
       <div id="gps-status" class="status-badge" recherche>Recherche GPS...</div>
     </header>
 
-    <!-- Tableau de bord temps réel-->
+    <!-- Tableau de bord temps réel (Modèle React) -->
     <div class="dashboard">
       <div class="card">
         <span class="label">Vitesse actuelle</span>
-        <span id="current-speed" class="value">0 <small>km/h</small></span>
+        <span id="current-speed" class="value">0 <small class="unit">km/h</small></span>
       </div>
       <div class="card">
-        <span class="label">Prochain Radar</span>
-        <span id="next-camera-dist" class="value">-- <small>m</small></span>
+        <span id="next-radar-label" class="label">Prochain Radar (-- km/h)</span>
+        <span id="next-camera-dist" class="value">Calcul...</span>
       </div>
     </div>
 
