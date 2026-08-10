@@ -21,7 +21,7 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     attribution: "© OpenStreetMap",
   }).addTo(map);
 
-  // Charger les radars depuis le Gist GitHub (exactement comme dans le .tsx)
+  // Charger les radars depuis le Gist GitHub
   fetch(GIST_URL)
     .then((response) => response.json())
     .then((data) => {
@@ -81,7 +81,7 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// --- 4. GESTION DES COULEURS (Modèle React) ---
+// --- 4. GESTION DES COULEURS ---
 function getAlertColor(dist) {
   if (dist <= 500) return "#e74c3c"; // Rouge
   if (dist <= 1000) return "#e67e22"; // Orange
@@ -101,7 +101,7 @@ if (btnStart) {
   });
 }
 
-// --- 6. SUIVI GPS TEMPS RÉEL ---
+// --- 6. SUIVI GPS TEMPS RÉEL & SUIVI CARTE ---
 function demarrerGPS() {
   const statusBadge = document.getElementById("gps-status");
   const currentSpeedEl = document.getElementById("current-speed");
@@ -109,8 +109,6 @@ function demarrerGPS() {
   const nextRadarLabelEl = document.getElementById("next-radar-label");
   const alertBanner = document.getElementById("alert-banner");
   const alertText = document.getElementById("alert-text");
-
-  let isFirstPosition = true;
 
   if ("geolocation" in navigator) {
     if (statusBadge) {
@@ -126,15 +124,13 @@ function demarrerGPS() {
         if (currentSpeedEl)
           currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
 
-        if (isFirstPosition && map) {
-          map.setView([latitude, longitude], 15);
-          isFirstPosition = false;
-        }
-
+        // Centrage dynamique de la carte en continu pour suivre le véhicule
         if (map) {
+          map.setView([latitude, longitude], 16);
+
           if (!userMarker) {
             userMarker = L.circleMarker([latitude, longitude], {
-              radius: 8,
+              radius: 9,
               color: "#3b82f6",
               fillColor: "#60a5fa",
               fillOpacity: 1,
@@ -163,7 +159,6 @@ function demarrerGPS() {
 
           const distanceArrondie = Math.round(plusProcheDistance);
 
-          // Mise à jour synchro avec le modèle React (Titre + Vitesse limite entre parenthèses)
           if (nextRadarLabelEl) {
             nextRadarLabelEl.textContent = `Prochain Radar (${radarConcerne.vitesseLimite} km/h)`;
           }
@@ -173,12 +168,12 @@ function demarrerGPS() {
               distanceArrondie > 99999 ? "Calcul..." : `${distanceArrondie} m`;
           }
 
-          // Changement dynamique de la couleur de l'en-tête selon les seuils du TSX
           const headerEl = document.getElementById("main-header");
           if (headerEl) {
             headerEl.style.backgroundColor = getAlertColor(distanceArrondie);
           }
 
+          // Gestion de la bannière d'alerte visuelle et sonore
           if (distanceArrondie <= 500) {
             if (alertBanner) alertBanner.classList.remove("hidden");
             if (alertText)
@@ -197,7 +192,7 @@ function demarrerGPS() {
       (error) => {
         console.warn(`Erreur GPS: ${error.message}`);
         if (statusBadge) {
-          statusBadge.textContent = "Erreur GPS";
+          statusBadge.textContent = "Erreur GPS (" + error.code + ")";
           statusBadge.className = "status-badge erreur";
         }
       },

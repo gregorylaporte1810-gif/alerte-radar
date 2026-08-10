@@ -11,17 +11,17 @@
 <body>
 
   <div class="app-container">
-    <!-- En-tête dynamique (qui changera de couleur selon l'alerte) -->
+    <!-- En-tête dynamique -->
     <header id="main-header">
       <div class="header-top">
         <h1>Alerte Radar Live</h1>
         <span id="gps-status" class="status-badge attente">GPS en attente...</span>
       </div>
 
-      <!-- Bouton pour démarrer le GPS sur le web -->
+      <!-- Bouton pour démarrer le GPS -->
       <button id="btn-start" class="btn-start">Activer le GPS & l'Audio</button>
 
-      <!-- Tableau de bord temps réel (Modèle React) -->
+      <!-- Tableau de bord temps réel -->
       <div class="dashboard">
         <div class="box">
           <span class="label">Vitesse actuelle</span>
@@ -36,6 +36,11 @@
         </div>
       </div>
     </header>
+
+    <!-- Bannière d'alerte masquée par défaut -->
+    <div id="alert-banner" class="alert-banner hidden">
+      <span id="alert-text">⚠️ Alerte Radar proche</span>
+    </div>
 
     <!-- Carte -->
     <div id="map"></div>
