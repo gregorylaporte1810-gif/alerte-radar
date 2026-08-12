@@ -18,7 +18,8 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
-const GIST_URL = "https://gist.githubusercontent.com/gregorylaporte1810-gif/61f8993ec31c44df8058c3961078bee0/raw/8e7110629e8c6c9dafeb3cd05b607a7ec9faaaa8/radars.json";
+const GIST_URL =
+  "https://gist.githubusercontent.com/gregorylaporte1810-gif/9b4eeb6c715a0bcde5644ad236d8d3f9/raw/bbe7399262869585ce05578e7d07aceaf0934f55/radars.json";
 
 let map;
 let userMarker;
@@ -42,12 +43,17 @@ function afficherInfosTrajet(summary) {
   const minutesTotales = Math.round(summary.totalTime / 60);
   const heures = Math.floor(minutesTotales / 60);
   const mins = minutesTotales % 60;
-  
+
   let tempsTexte = heures > 0 ? `${heures}h ${mins}min` : `${mins} min`;
 
   const maintenant = new Date();
-  const heureArrivee = new Date(maintenant.getTime() + summary.totalTime * 1000);
-  const heureArriveeStr = heureArrivee.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const heureArrivee = new Date(
+    maintenant.getTime() + summary.totalTime * 1000,
+  );
+  const heureArriveeStr = heureArrivee.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   // Gestion de la boîte ETA dans le dashboard
   let etaBox = document.getElementById("eta-box");
@@ -62,16 +68,16 @@ function afficherInfosTrajet(summary) {
       etaBox = document.createElement("div");
       etaBox.className = "box";
       etaBox.id = "eta-box";
-      
+
       const label = document.createElement("span");
       label.className = "label";
       label.id = "eta-label";
-      
+
       const value = document.createElement("span");
       value.className = "value";
       value.id = "eta-value";
       value.style.fontSize = "1.2rem";
-      
+
       etaBox.appendChild(label);
       etaBox.appendChild(value);
       dashboard.appendChild(etaBox);
@@ -79,8 +85,10 @@ function afficherInfosTrajet(summary) {
   }
 
   if (etaBox) {
-    document.getElementById("eta-label").textContent = `Arrivée à ${heureArriveeStr}`;
-    document.getElementById("eta-value").textContent = `${tempsTexte} (${distanceKm} km)`;
+    document.getElementById("eta-label").textContent =
+      `Arrivée à ${heureArriveeStr}`;
+    document.getElementById("eta-value").textContent =
+      `${tempsTexte} (${distanceKm} km)`;
   }
 
   // Afficher la barre de contrôle du guidage
@@ -98,34 +106,36 @@ function tracerItineraire(start, destination) {
   routingControl = L.Routing.control({
     waypoints: [
       L.latLng(start.lat, start.lng),
-      L.latLng(destination.lat, destination.lng)
+      L.latLng(destination.lat, destination.lng),
     ],
-    language: 'fr',
+    language: "fr",
     routeWhileDragging: false,
     showAlternatives: false,
     fitSelectedRoutes: false,
     addWaypoints: false,
     lineOptions: {
-      styles: [{ color: '#3498db', opacity: 0.85, weight: 7 }]
+      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }],
     },
-    createMarker: function(i, wp, nWps) {
+    createMarker: function (i, wp, nWps) {
       if (i === nWps - 1) {
         return L.marker(wp.latLng);
       }
       return null;
-    }
+    },
   }).addTo(map);
 
   // Écouter la création des routes pour récupérer les instructions textuelles et l'ETA
-  routingControl.on('routesfound', function(e) {
+  routingControl.on("routesfound", function (e) {
     const route = e.routes[0];
     afficherInfosTrajet(route.summary);
 
     // Remplir la modale des détails
-    const instructionsContainer = document.getElementById("instructions-container");
+    const instructionsContainer = document.getElementById(
+      "instructions-container",
+    );
     if (instructionsContainer) {
       instructionsContainer.innerHTML = "";
-      route.instructions.forEach(instruction => {
+      route.instructions.forEach((instruction) => {
         const div = document.createElement("div");
         div.style.padding = "8px 0";
         div.style.borderBottom = "1px solid #eee";
@@ -174,25 +184,57 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     placeholder: "Rechercher une adresse...",
     errorMessage: "Adresse introuvable",
   })
-  .on("markgeocode", function (e) {
-    if (!userMarker) {
-      alert("Veuillez d'abord activer le GPS pour définir votre point de départ.");
-      return;
-    }
-    tracerItineraire(userMarker.getLatLng(), e.geocode.center);
-  })
-  .addTo(map);
+    .on("markgeocode", function (e) {
+      if (!userMarker) {
+        alert(
+          "Veuillez d'abord activer le GPS pour définir votre point de départ.",
+        );
+        return;
+      }
+      tracerItineraire(userMarker.getLatLng(), e.geocode.center);
+    })
+    .addTo(map);
 
-  // Chargement des radars
+  // Chargement des radars depuis le Gist officiel
   fetch(GIST_URL)
     .then((response) => response.json())
     .then((data) => {
-      radarsDatabase = data;
-      console.log("Radars chargés avec succès :", data.length);
+      radarsDatabase = data
+        .map((item) => {
+          const latKey = Object.keys(item).find((k) => k.trim() === "Latitude");
+          const lonKey = Object.keys(item).find((k) => k.trim() === "Longitude");
+          const numKey = Object.keys(item).find((k) => k.trim() === "Numéro de radar");
+          const typeKey = Object.keys(item).find((k) => k.trim() === "Type de radar");
+          const dateKey = Object.keys(item).find((k) => k.trim() === "Date de mise en service");
+          const vmaKey = Object.keys(item).find((k) => k.trim() === "VMA");
+
+          const latStr = String(item[latKey] || "").trim().replace("+", "");
+          const lonStr = String(item[lonKey] || "").trim().replace("+", "");
+          const vmaVal = item[vmaKey];
+
+          return {
+            id: item[numKey],
+            type: item[typeKey],
+            dateMiseEnService: item[dateKey],
+            vitesseLimite: vmaVal === "NA" ? "NA" : vmaVal,
+            lat: parseFloat(latStr),
+            lon: parseFloat(lonStr),
+            nom: `${item[typeKey]} (${item[numKey]})`,
+          };
+        })
+        .filter((radar) => !isNaN(radar.lat) && !isNaN(radar.lon));
+
+      console.log(
+        "Radars officiels chargés avec succès :",
+        radarsDatabase.length,
+      );
+
       radarsDatabase.forEach((radar) => {
         const marker = L.marker([radar.lat, radar.lon])
           .addTo(map)
-          .bindPopup(`<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`);
+          .bindPopup(
+            `<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`,
+          );
         radarMarkers.push(marker);
       });
     })
@@ -205,7 +247,9 @@ window.addEventListener("DOMContentLoaded", () => {
   // Clic sur la carte pour définir une destination
   map.on("click", function (e) {
     if (!userMarker) {
-      alert("Veuillez d'abord lancer le GPS pour définir votre point de départ.");
+      alert(
+        "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
+      );
       return;
     }
     tracerItineraire(userMarker.getLatLng(), e.latlng);
@@ -262,7 +306,9 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   const dLat = (lat2 - lat1) * rad;
   const dLon = (lon2 - lon1) * rad;
 
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -322,7 +368,9 @@ function demarrerGPS() {
           map.setView([latitude, longitude], 17, { animate: true });
 
           if (!userMarker) {
-            userMarker = L.marker([latitude, longitude], { icon: carIcon }).addTo(map);
+            userMarker = L.marker([latitude, longitude], {
+              icon: carIcon,
+            }).addTo(map);
           } else {
             userMarker.setLatLng([latitude, longitude]);
           }
@@ -341,7 +389,12 @@ function demarrerGPS() {
           let radarConcerne = { nom: "Aucun", vitesseLimite: "--" };
 
           radarsDatabase.forEach((radar) => {
-            const distance = calculerDistance(latitude, longitude, radar.lat, radar.lon);
+            const distance = calculerDistance(
+              latitude,
+              longitude,
+              radar.lat,
+              radar.lon,
+            );
             if (distance < plusProcheDistance) {
               plusProcheDistance = distance;
               radarConcerne = radar;
@@ -355,7 +408,10 @@ function demarrerGPS() {
           }
 
           if (nextCameraDistEl) {
-            nextCameraDistEl.textContent = distanceArrondie > 99999 ? "Calcul..." : formatDistance(distanceArrondie);
+            nextCameraDistEl.textContent =
+              distanceArrondie > 99999
+                ? "Calcul..."
+                : formatDistance(distanceArrondie);
           }
 
           const headerEl = document.getElementById("main-header");
@@ -389,7 +445,7 @@ function demarrerGPS() {
         enableHighAccuracy: true,
         maximumAge: 0,
         timeout: 10000,
-      }
+      },
     );
   }
 }
