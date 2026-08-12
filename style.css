@@ -126,22 +126,16 @@ h1 {
 /* --- ADAPTATION POUR MOBILE (SMARTPHONES) --- */
 @media (max-width: 768px) {
   .dashboard {
-    flex-wrap: wrap; /* Autorise les éléments à passer à la ligne */
-    gap: 10px;
+    flex-wrap: wrap !important;
+    justify-content: space-around !important;
   }
 
-  /* On force le bloc de guidage à prendre toute la largeur et à se mettre en bas */
+  /* Force absolue du passage à la ligne */
   #navigation-controls {
-    order: 99; /* S'assure qu'il s'affiche en dernier */
-    width: 100%; 
-    display: flex;
-    justify-content: center;
-    margin-top: 5px;
-  }
-  
-  /* On ajuste un peu la taille de l'ETA pour gagner de la place */
-  #eta-box {
-    margin: 0 auto;
-    text-align: center;
+    flex: 0 0 100% !important; /* Le 100% ici garantit qu'il prend toute la ligne */
+    order: 99 !important; /* L'envoie tout à la fin */
+    display: flex !important;
+    justify-content: center !important;
+    margin-top: 15px !important;
   }
 }
