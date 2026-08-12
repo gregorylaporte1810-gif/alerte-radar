@@ -28,7 +28,8 @@ let radarsDatabase = [];
 let audioCtx;
 let dernierBipTime = 0;
 let routingControl = null;
-let destinationActuelle = null; // Stocke la destination choisie
+let destinationActuelle = null;
+let derniereAnnonceVocale = 0;
 
 const carIcon = L.icon({
   iconUrl: "voiture-removebg-preview.png",
@@ -55,7 +56,6 @@ function afficherInfosTrajet(summary) {
     minute: "2-digit",
   });
 
-  // Gestion de la boîte ETA dans le dashboard
   let etaBox = document.getElementById("eta-box");
   if (!etaBox) {
     const dashboard = document.querySelector(".dashboard");
@@ -91,13 +91,12 @@ function afficherInfosTrajet(summary) {
       `${tempsTexte} (${distanceKm} km)`;
   }
 
-  // Afficher la barre de contrôle du guidage
   const navControls = document.getElementById("navigation-controls");
   if (navControls) navControls.style.display = "block";
 }
 
 function tracerItineraire(start, destination) {
-  destinationActuelle = destination; // On mémorise la destination
+  destinationActuelle = destination;
 
   if (routingControl) {
     map.removeControl(routingControl);
@@ -109,12 +108,17 @@ function tracerItineraire(start, destination) {
       L.latLng(destination.lat, destination.lng),
     ],
     language: "fr",
+    show: false, 
     routeWhileDragging: false,
-    showAlternatives: false,
+    showAlternatives: true, 
+    // --- LA CORRECTION EST ICI : altLineOptions au lieu de alternativeLineOptions ---
+    altLineOptions: {
+      styles: [{ opacity: 0, weight: 0 }] 
+    },
     fitSelectedRoutes: false,
     addWaypoints: false,
     lineOptions: {
-      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }],
+      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }], 
     },
     createMarker: function (i, wp, nWps) {
       if (i === nWps - 1) {
@@ -124,18 +128,57 @@ function tracerItineraire(start, destination) {
     },
   }).addTo(map);
 
-  // Écouter la création des routes pour récupérer les instructions textuelles et l'ETA
   routingControl.on("routesfound", function (e) {
-    const route = e.routes[0];
-    afficherInfosTrajet(route.summary);
+    const activeRoute = e.routes[0];
+    afficherInfosTrajet(activeRoute.summary);
 
-    // Remplir la modale des détails
-    const instructionsContainer = document.getElementById(
-      "instructions-container",
-    );
+    const instructionsContainer = document.getElementById("instructions-container");
     if (instructionsContainer) {
       instructionsContainer.innerHTML = "";
-      route.instructions.forEach((instruction) => {
+
+      if (e.routes.length > 1) {
+        const titleDiv = document.createElement("div");
+        titleDiv.style.fontWeight = "bold";
+        titleDiv.style.marginBottom = "8px";
+        titleDiv.textContent = "Choisir un itinéraire :";
+        instructionsContainer.appendChild(titleDiv);
+
+        const selectorContainer = document.createElement("div");
+        selectorContainer.style.display = "flex";
+        selectorContainer.style.gap = "8px";
+        selectorContainer.style.marginBottom = "15px";
+
+        e.routes.forEach((route, index) => {
+          const distKm = (route.summary.totalDistance / 1000).toFixed(1);
+          const mins = Math.round(route.summary.totalTime / 60);
+
+          const btn = document.createElement("button");
+          btn.textContent = `Option ${index + 1} : ${distKm} km (${mins} min)`;
+          btn.style.padding = "8px 12px";
+          btn.style.border = "1px solid #3498db";
+          btn.style.borderRadius = "6px";
+          btn.style.backgroundColor = (route === activeRoute) ? "#3498db" : "#fff";
+          btn.style.color = (route === activeRoute) ? "#fff" : "#3498db";
+          btn.style.cursor = "pointer";
+          btn.style.fontWeight = "bold";
+
+          btn.onclick = () => {
+            routingControl.selectRoute(route); 
+          };
+
+          selectorContainer.appendChild(btn);
+        });
+
+        instructionsContainer.appendChild(selectorContainer);
+      }
+
+      const listTitle = document.createElement("div");
+      listTitle.style.fontWeight = "bold";
+      listTitle.style.marginBottom = "8px";
+      listTitle.textContent = "Feuille de route :";
+      instructionsContainer.appendChild(listTitle);
+
+      activeRoute.instructions.forEach((instruction) => {
         const div = document.createElement("div");
         div.style.padding = "8px 0";
         div.style.borderBottom = "1px solid #eee";
@@ -146,7 +189,6 @@ function tracerItineraire(start, destination) {
   });
 }
 
-// Fonction pour stopper / effacer l'itinéraire
 function arreterGuidage() {
   if (routingControl) {
     map.removeControl(routingControl);
@@ -154,7 +196,6 @@ function arreterGuidage() {
   }
   destinationActuelle = null;
 
-  // Masquer les éléments de guidage
   const navControls = document.getElementById("navigation-controls");
   if (navControls) navControls.style.display = "none";
 
@@ -173,43 +214,65 @@ function initMap(lat = 46.603354, lon = 1.888334) {
 
   map = L.map("map").setView([lat, lon], 13);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // --- DÉTECTION JOUR / NUIT ---
+  const heureActuelle = new Date().getHours();
+  const estNuit = heureActuelle >= 20 || heureActuelle < 7;
+
+  const tileUrl = estNuit
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+  L.tileLayer(tileUrl, {
     maxZoom: 19,
-    attribution: "© OpenStreetMap",
+    attribution: "© OpenStreetMap & CartoDB",
   }).addTo(map);
 
-  // Barre de recherche
-  L.Control.geocoder({
-    defaultMarkGeocode: false,
-    placeholder: "Rechercher une adresse...",
-    errorMessage: "Adresse introuvable",
-  })
-    .on("markgeocode", function (e) {
-      if (!userMarker) {
-        alert(
-          "Veuillez d'abord activer le GPS pour définir votre point de départ.",
-        );
-        return;
-      }
-      tracerItineraire(userMarker.getLatLng(), e.geocode.center);
+  // --- BARRE DE RECHERCHE D'ADRESSE (GEOCODER) ---
+  if (L.Control.geocoder) {
+    L.Control.geocoder({
+      defaultMarkGeocode: false,
+      placeholder: "Rechercher une adresse...",
+      errorMessage: "Adresse introuvable",
     })
-    .addTo(map);
+      .on("markgeocode", function (e) {
+        if (!userMarker) {
+          alert(
+            "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
+          );
+          return;
+        }
+        tracerItineraire(userMarker.getLatLng(), e.geocode.center);
+      })
+      .addTo(map);
+  }
 
-  // Chargement des radars depuis le Gist officiel
+  // --- CHARGEMENT DES RADARS ---
   fetch(GIST_URL)
     .then((response) => response.json())
     .then((data) => {
       radarsDatabase = data
         .map((item) => {
           const latKey = Object.keys(item).find((k) => k.trim() === "Latitude");
-          const lonKey = Object.keys(item).find((k) => k.trim() === "Longitude");
-          const numKey = Object.keys(item).find((k) => k.trim() === "Numéro de radar");
-          const typeKey = Object.keys(item).find((k) => k.trim() === "Type de radar");
-          const dateKey = Object.keys(item).find((k) => k.trim() === "Date de mise en service");
+          const lonKey = Object.keys(item).find(
+            (k) => k.trim() === "Longitude",
+          );
+          const numKey = Object.keys(item).find(
+            (k) => k.trim() === "Numéro de radar",
+          );
+          const typeKey = Object.keys(item).find(
+            (k) => k.trim() === "Type de radar",
+          );
+          const dateKey = Object.keys(item).find(
+            (k) => k.trim() === "Date de mise en service",
+          );
           const vmaKey = Object.keys(item).find((k) => k.trim() === "VMA");
 
-          const latStr = String(item[latKey] || "").trim().replace("+", "");
-          const lonStr = String(item[lonKey] || "").trim().replace("+", "");
+          const latStr = String(item[latKey] || "")
+            .trim()
+            .replace("+", "");
+          const lonStr = String(item[lonKey] || "")
+            .trim()
+            .replace("+", "");
           const vmaVal = item[vmaKey];
 
           return {
@@ -244,18 +307,18 @@ function initMap(lat = 46.603354, lon = 1.888334) {
 window.addEventListener("DOMContentLoaded", () => {
   initMap();
 
-  // Clic sur la carte pour définir une destination
-  map.on("click", function (e) {
-    if (!userMarker) {
-      alert(
-        "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
-      );
-      return;
-    }
-    tracerItineraire(userMarker.getLatLng(), e.latlng);
-  });
+  if (map) {
+    map.on("click", function (e) {
+      if (!userMarker) {
+        alert(
+          "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
+        );
+        return;
+      }
+      tracerItineraire(userMarker.getLatLng(), e.latlng);
+    });
+  }
 
-  // Gestion des boutons de la modale et du guidage
   const btnStop = document.getElementById("btn-stop-nav");
   if (btnStop) {
     btnStop.addEventListener("click", arreterGuidage);
@@ -278,7 +341,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// --- 4. GESTION DU SON D'ALERTE ---
+// --- 4. GESTION DU SON D'ALERTE & SYNTHÈSE VOCALE ---
 function jouerBipAlerte() {
   if (!audioCtx) return;
   try {
@@ -296,6 +359,23 @@ function jouerBipAlerte() {
     oscillator.stop(audioCtx.currentTime + 0.2);
   } catch (e) {
     console.log("Erreur audio :", e);
+  }
+}
+
+function annoncerRadarVocal(radar, distance) {
+  const maintenant = Date.now();
+  if (maintenant - derniereAnnonceVocale > 30000) {
+    if ("speechSynthesis" in window) {
+      const distanceMetres = Math.round(distance);
+      const texte = `Attention, radar à ${distanceMetres} mètres. Vitesse limitée à ${radar.vitesseLimite}.`;
+
+      const msg = new SpeechSynthesisUtterance(texte);
+      msg.lang = "fr-FR";
+      msg.rate = 1.1;
+      window.speechSynthesis.speak(msg);
+
+      derniereAnnonceVocale = maintenant;
+    }
   }
 }
 
@@ -363,9 +443,10 @@ function demarrerGPS() {
         if (currentSpeedEl)
           currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
 
-        // Centrage carte (Zoom 17)
         if (map) {
           map.setView([latitude, longitude], 17, { animate: true });
+
+          const cap = position.coords.heading || 0;
 
           if (!userMarker) {
             userMarker = L.marker([latitude, longitude], {
@@ -375,7 +456,15 @@ function demarrerGPS() {
             userMarker.setLatLng([latitude, longitude]);
           }
 
-          // Mise à jour continue du départ de l'itinéraire si actif
+          if (userMarker._icon) {
+            userMarker._icon.style.transformOrigin = "center center";
+            const baseTransform = userMarker._icon.style.transform.replace(
+              /rotateZ\(.*?\)/g,
+              "",
+            );
+            userMarker._icon.style.transform = `${baseTransform} rotateZ(${cap}deg)`;
+          }
+
           if (routingControl && destinationActuelle) {
             const waypoints = routingControl.getWaypoints();
             waypoints[0].latLng = L.latLng(latitude, longitude);
@@ -383,7 +472,6 @@ function demarrerGPS() {
           }
         }
 
-        // Vérification des radars
         if (radarsDatabase.length > 0) {
           let plusProcheDistance = 999999;
           let radarConcerne = { nom: "Aucun", vitesseLimite: "--" };
@@ -427,6 +515,7 @@ function demarrerGPS() {
             const maintenant = Date.now();
             if (maintenant - dernierBipTime > 2000) {
               jouerBipAlerte();
+              annoncerRadarVocal(radarConcerne, distanceArrondie);
               dernierBipTime = maintenant;
             }
           } else {
