@@ -118,3 +118,30 @@ h1 {
   from { opacity: 0.8; }
   to { opacity: 1; }
 }
+
+.leaflet-routing-container {
+  display: none !important;
+}
+
+/* --- ADAPTATION POUR MOBILE (SMARTPHONES) --- */
+@media (max-width: 768px) {
+  .dashboard {
+    flex-wrap: wrap; /* Autorise les éléments à passer à la ligne */
+    gap: 10px;
+  }
+
+  /* On force le bloc de guidage à prendre toute la largeur et à se mettre en bas */
+  #navigation-controls {
+    order: 99; /* S'assure qu'il s'affiche en dernier */
+    width: 100%; 
+    display: flex;
+    justify-content: center;
+    margin-top: 5px;
+  }
+  
+  /* On ajuste un peu la taille de l'ETA pour gagner de la place */
+  #eta-box {
+    margin: 0 auto;
+    text-align: center;
+  }
+}
