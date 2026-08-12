@@ -123,19 +123,26 @@ h1 {
   display: none !important;
 }
 
-/* --- ADAPTATION POUR MOBILE (SMARTPHONES) --- */
-@media (max-width: 768px) {
+/* --- ADAPTATION MOBILE & PAYSAGE --- */
+@media (max-width: 950px), (max-height: 500px) {
   .dashboard {
-    flex-wrap: wrap !important;
-    justify-content: space-around !important;
+    padding: 4px 12px !important;
   }
 
-  /* Force absolue du passage à la ligne */
+  /* Déplacement du guidage en pilule flottante en bas de la carte */
   #navigation-controls {
-    flex: 0 0 100% !important; /* Le 100% ici garantit qu'il prend toute la ligne */
-    order: 99 !important; /* L'envoie tout à la fin */
-    display: flex !important;
-    justify-content: center !important;
-    margin-top: 15px !important;
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 1000 !important;
+    background: rgba(30, 39, 46, 0.92) !important;
+    backdrop-filter: blur(6px);
+    padding: 6px 14px !important;
+    border-radius: 30px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+    margin: 0 !important;
+    width: auto !important;
+    white-space: nowrap !important;
   }
 }
