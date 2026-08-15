@@ -111,25 +111,28 @@ function tracerItineraire(start, destination) {
   if (sansAutoroute) exclusions.push("motorway");
 
   // --- 2. CONFIGURATION DE MAPBOX ---
-  const mapboxToken =
-    "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
+  const mapboxToken = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 
   const routerMapbox = L.Routing.osrmv1({
     serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving",
   });
 
-  // On surcharge proprement l'URL tout en conservant le support OSRM de Leaflet
   routerMapbox.options.profile = "mapbox/driving";
 
   const originalBuildRouteUrl = routerMapbox.buildRouteUrl;
   routerMapbox.buildRouteUrl = function (waypoints, options) {
     let url = originalBuildRouteUrl.call(this, waypoints, options);
-    url += "?access_token=" + mapboxToken;
-    url += "&overview=full&steps=true&alternatives=true&language=fr";
+    
+    // Correction de l'URL : on vérifie si un '?' est déjà présent
+    const separateur = url.includes("?") ? "&" : "?";
+    
+    let nouvelleUrl = url + separateur + "access_token=" + mapboxToken;
+    nouvelleUrl += "&overview=full&steps=true&alternatives=true&language=fr";
+    
     if (exclusions.length > 0) {
-      url += "&exclude=" + exclusions.join(",");
+      nouvelleUrl += "&exclude=" + exclusions.join(",");
     }
-    return url;
+    return nouvelleUrl;
   };
 
   // --- 3. LANCEMENT DU CALCUL ---
