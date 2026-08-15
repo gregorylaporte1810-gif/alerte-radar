@@ -111,29 +111,25 @@ function tracerItineraire(start, destination) {
   if (sansAutoroute) exclusions.push("motorway");
 
   // --- 2. CONFIGURATION DE MAPBOX ---
-  const mapboxToken = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ"; 
+  const mapboxToken =
+    "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 
   const routerMapbox = L.Routing.osrmv1({
-    serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving"
+    serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving",
   });
 
-  routerMapbox.buildRouteUrl = function(waypoints, options) {
-    const wpPoints = waypoints.map(wp => `${wp.latLng.lng},${wp.latLng.lat}`).join(';');
-    let url = `https://api.mapbox.com/directions/v5/mapbox/driving/${wpPoints}`;
-    
-    let params = [
-      `access_token=${mapboxToken}`,
-      "overview=full",
-      "steps=true",
-      "alternatives=true",
-      "language=fr"
-    ];
+  // On surcharge proprement l'URL tout en conservant le support OSRM de Leaflet
+  routerMapbox.options.profile = "mapbox/driving";
 
+  const originalBuildRouteUrl = routerMapbox.buildRouteUrl;
+  routerMapbox.buildRouteUrl = function (waypoints, options) {
+    let url = originalBuildRouteUrl.call(this, waypoints, options);
+    url += "?access_token=" + mapboxToken;
+    url += "&overview=full&steps=true&alternatives=true&language=fr";
     if (exclusions.length > 0) {
-      params.push(`exclude=${exclusions.join(",")}`);
+      url += "&exclude=" + exclusions.join(",");
     }
-
-    return url + "?" + params.join("&");
+    return url;
   };
 
   // --- 3. LANCEMENT DU CALCUL ---
@@ -144,16 +140,16 @@ function tracerItineraire(start, destination) {
     ],
     router: routerMapbox,
     language: "fr",
-    show: false, 
+    show: false,
     routeWhileDragging: false,
-    showAlternatives: true, 
+    showAlternatives: true,
     altLineOptions: {
-      styles: [{ opacity: 0, weight: 0 }] 
+      styles: [{ opacity: 0, weight: 0 }],
     },
     fitSelectedRoutes: false,
     addWaypoints: false,
     lineOptions: {
-      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }], 
+      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }],
     },
     createMarker: function (i, wp, nWps) {
       if (i === nWps - 1) {
@@ -168,7 +164,9 @@ function tracerItineraire(start, destination) {
     const activeRoute = e.routes[0];
     afficherInfosTrajet(activeRoute.summary);
 
-    const instructionsContainer = document.getElementById("instructions-container");
+    const instructionsContainer = document.getElementById(
+      "instructions-container",
+    );
     if (instructionsContainer) {
       instructionsContainer.innerHTML = "";
 
@@ -193,13 +191,14 @@ function tracerItineraire(start, destination) {
           btn.style.padding = "8px 12px";
           btn.style.border = "1px solid #3498db";
           btn.style.borderRadius = "6px";
-          btn.style.backgroundColor = (route === activeRoute) ? "#3498db" : "#fff";
-          btn.style.color = (route === activeRoute) ? "#fff" : "#3498db";
+          btn.style.backgroundColor =
+            route === activeRoute ? "#3498db" : "#fff";
+          btn.style.color = route === activeRoute ? "#fff" : "#3498db";
           btn.style.cursor = "pointer";
           btn.style.fontWeight = "bold";
 
           btn.onclick = () => {
-            routingControl.selectRoute(route); 
+            routingControl.selectRoute(route);
           };
 
           selectorContainer.appendChild(btn);
