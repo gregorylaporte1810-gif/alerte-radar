@@ -110,25 +110,24 @@ function tracerItineraire(start, destination) {
   if (sansPeage) exclusions.push("toll");
   if (sansAutoroute) exclusions.push("motorway");
 
-  // --- 2. CONFIGURATION DE MAPBOX ---
-  const mapboxToken = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
+  // --- 2. CONFIGURATION DE MAPBOX CORRIGÉE ---
+  const mapboxToken =
+    "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 
   const routerMapbox = L.Routing.osrmv1({
-    serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving",
+    serviceUrl: "https://api.mapbox.com/directions/v5", // Retrait de la duplication
+    profile: "mapbox/driving", // Déclaré proprement ici
   });
-
-  routerMapbox.options.profile = "mapbox/driving";
 
   const originalBuildRouteUrl = routerMapbox.buildRouteUrl;
   routerMapbox.buildRouteUrl = function (waypoints, options) {
     let url = originalBuildRouteUrl.call(this, waypoints, options);
-    
-    // Correction de l'URL : on vérifie si un '?' est déjà présent
+
     const separateur = url.includes("?") ? "&" : "?";
-    
+
     let nouvelleUrl = url + separateur + "access_token=" + mapboxToken;
     nouvelleUrl += "&overview=full&steps=true&alternatives=true&language=fr";
-    
+
     if (exclusions.length > 0) {
       nouvelleUrl += "&exclude=" + exclusions.join(",");
     }
@@ -502,18 +501,6 @@ function demarrerGPS() {
             );
             userMarker._icon.style.transform = `${baseTransform} rotateZ(${cap}deg)`;
           }
-
-          // --- CORRECTION ---
-          // On ne met plus à jour les waypoints en temps réel ici pour éviter 
-          // de saturer l'API Mapbox (Rate Limit) et de faire planter le navigateur.
-          // La route tracée reste fixe sur la carte, mais ton marqueur GPS continuera d'avancer dessus !
-          /* 
-          if (routingControl && destinationActuelle) {
-            const waypoints = routingControl.getWaypoints();
-            waypoints[0].latLng = L.latLng(latitude, longitude);
-            routingControl.setWaypoints(waypoints);
-          }
-          */
         }
 
         if (radarsDatabase.length > 0) {
