@@ -78,6 +78,23 @@
       </div>
     </header>
 
+    <!-- Barre de favoris -->
+    <div id="favorites-bar" class="favorites-bar">
+      <button class="btn-favori" onclick="lancerFavori(48.2045, 2.5353)">🏠 Maison (Ichy)</button>
+      <button class="btn-favori" onclick="lancerFavori(47.6000, 2.0000)">🌲 Sologne</button>
+      <button class="btn-favori" onclick="lancerFavori(48.8566, 2.3522)">🗼 Paris</button>
+    </div>
+
+    <!-- Options d'itinéraire -->
+    <div id="route-options" style="display: flex; gap: 15px; justify-content: center; padding: 10px; background: #0b132b; border-bottom: 1px solid #34495e;">
+      <label style="color: white; font-size: 0.9rem; display: flex; align-items: center; gap: 5px;">
+        <input type="checkbox" id="check-peage"> Sans péage
+      </label>
+      <label style="color: white; font-size: 0.9rem; display: flex; align-items: center; gap: 5px;">
+        <input type="checkbox" id="check-autoroute"> Sans autoroute
+      </label>
+    </div>
+
     <!-- Bannière d'alerte masquée par défaut -->
     <div id="alert-banner" class="alert-banner hidden">
       <span id="alert-text">⚠️ Alerte Radar proche</span>

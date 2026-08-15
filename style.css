@@ -146,3 +146,36 @@ h1 {
     white-space: nowrap !important;
   }
 }
+/* --- BARRE DE FAVORIS --- */
+.favorites-bar {
+  display: flex;
+  gap: 10px;
+  padding: 10px 15px;
+  background: #0b132b;
+  overflow-x: auto;
+  white-space: nowrap;
+  /* Masquer la barre de défilement pour faire plus propre */
+  -ms-overflow-style: none;  
+  scrollbar-width: none;  
+}
+
+.favorites-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.btn-favori {
+  background: #34495e;
+  color: white;
+  border: 1px solid #7f8c8d;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-favori:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}

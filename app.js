@@ -102,16 +102,47 @@ function tracerItineraire(start, destination) {
     map.removeControl(routingControl);
   }
 
+  // --- 1. LECTURE DES OPTIONS ---
+  const sansPeage = document.getElementById("check-peage")?.checked;
+  const sansAutoroute = document.getElementById("check-autoroute")?.checked;
+
+  let exclusions = [];
+  if (sansPeage) exclusions.push("toll");
+  if (sansAutoroute) exclusions.push("motorway");
+
+  // --- 2. CONFIGURATION DE MAPBOX ---
+  // /!\ REMPLACEZ CETTE VALEUR PAR VOTRE CLÉ MAPBOX (pk.xxxx...)
+  const mapboxToken = "VOTRE_CLE_MAPBOX_ICI"; 
+
+  // On crée un routeur sur mesure pour injecter les exclusions Mapbox
+  const routerMapbox = L.Routing.osrmv1({
+    serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving"
+  });
+
+  // Astuce pour forcer Leaflet Routing Machine à envoyer les options de Mapbox
+  routerMapbox.buildRouteUrl = function(waypoints, options) {
+    let url = L.Routing.OSRMv1.prototype.buildRouteUrl.call(this, waypoints, options);
+    url = url.split('?')[0]; // On retire les paramètres OSRM par défaut
+    url += "?access_token=" + mapboxToken;
+    url += "&overview=full&steps=true&alternatives=true&language=fr";
+    if (exclusions.length > 0) {
+      url += "&exclude=" + exclusions.join(",");
+    }
+    return url;
+  };
+
+  // --- 3. LANCEMENT DU CALCUL ---
   routingControl = L.Routing.control({
     waypoints: [
       L.latLng(start.lat, start.lng),
       L.latLng(destination.lat, destination.lng),
     ],
+    // Si la clé Mapbox n'est pas encore renseignée, on utilise le routeur gratuit par défaut
+    router: mapboxToken !== "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ" ? routerMapbox : L.Routing.osrmv1(),
     language: "fr",
     show: false, 
     routeWhileDragging: false,
     showAlternatives: true, 
-    // --- LA CORRECTION EST ICI : altLineOptions au lieu de alternativeLineOptions ---
     altLineOptions: {
       styles: [{ opacity: 0, weight: 0 }] 
     },
@@ -128,6 +159,7 @@ function tracerItineraire(start, destination) {
     },
   }).addTo(map);
 
+  // --- 4. AFFICHAGE DES RÉSULTATS ---
   routingControl.on("routesfound", function (e) {
     const activeRoute = e.routes[0];
     afficherInfosTrajet(activeRoute.summary);
@@ -537,4 +569,14 @@ function demarrerGPS() {
       },
     );
   }
+}
+
+// --- 7. FAVORIS RAPIDES ---
+function lancerFavori(lat, lng) {
+  if (!userMarker) {
+    alert("Veuillez d'abord lancer le GPS (Activer le GPS & l'Audio).");
+    return;
+  }
+  const destination = { lat: lat, lng: lng };
+  tracerItineraire(userMarker.getLatLng(), destination);
 }
