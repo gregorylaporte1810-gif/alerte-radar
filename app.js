@@ -102,35 +102,37 @@ function tracerItineraire(start, destination) {
     map.removeControl(routingControl);
   }
 
-  // --- 1. LECTURE DES OPTIONS ---
+  // --- 1. LECTURE DES OPTIONS (Mapbox gère uniquement 'toll') ---
   const sansPeage = document.getElementById("check-peage")?.checked;
-  const sansAutoroute = document.getElementById("check-autoroute")?.checked;
 
   let exclusions = [];
   if (sansPeage) exclusions.push("toll");
-  if (sansAutoroute) exclusions.push("motorway");
 
-  // --- 2. CONFIGURATION DE MAPBOX CORRIGÉE ---
-  const mapboxToken =
-    "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
+  // --- 2. CONFIGURATION MAPBOX ---
+  const mapboxToken = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 
   const routerMapbox = L.Routing.osrmv1({
-    serviceUrl: "https://api.mapbox.com/directions/v5", // Retrait de la duplication
-    profile: "mapbox/driving", // Déclaré proprement ici
+    serviceUrl: "https://api.mapbox.com/directions/v5",
+    profile: "mapbox/driving",
   });
 
   const originalBuildRouteUrl = routerMapbox.buildRouteUrl;
   routerMapbox.buildRouteUrl = function (waypoints, options) {
     let url = originalBuildRouteUrl.call(this, waypoints, options);
-
+    
     const separateur = url.includes("?") ? "&" : "?";
-
+    
     let nouvelleUrl = url + separateur + "access_token=" + mapboxToken;
-    nouvelleUrl += "&overview=full&steps=true&alternatives=true&language=fr";
-
+    nouvelleUrl += "&overview=full&steps=true&language=fr";
+    
+    // Mapbox interdit 'alternatives=true' si 'exclude' est présent
     if (exclusions.length > 0) {
       nouvelleUrl += "&exclude=" + exclusions.join(",");
+      nouvelleUrl += "&alternatives=false";
+    } else {
+      nouvelleUrl += "&alternatives=true";
     }
+    
     return nouvelleUrl;
   };
 
@@ -144,7 +146,7 @@ function tracerItineraire(start, destination) {
     language: "fr",
     show: false,
     routeWhileDragging: false,
-    showAlternatives: true,
+    showAlternatives: exclusions.length === 0,
     altLineOptions: {
       styles: [{ opacity: 0, weight: 0 }],
     },
@@ -223,6 +225,11 @@ function tracerItineraire(start, destination) {
         instructionsContainer.appendChild(div);
       });
     }
+  });
+
+  routingControl.on("routingerror", function (e) {
+    console.error("Erreur de guidage :", e);
+    alert("Impossible de calculer l'itinéraire vers cette destination.");
   });
 }
 
