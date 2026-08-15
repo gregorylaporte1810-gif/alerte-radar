@@ -30,6 +30,10 @@ let dernierBipTime = 0;
 let routingControl = null;
 let destinationActuelle = null;
 let derniereAnnonceVocale = 0;
+let voiceGuidanceEnabled = false;
+let derniereLat = null;
+let derniereLon = null;
+let dernierCap = 0;
 
 const carIcon = L.icon({
   iconUrl: "voiture-removebg-preview.png",
@@ -95,11 +99,18 @@ function afficherInfosTrajet(summary) {
   if (navControls) navControls.style.display = "block";
 }
 
+let routePolyline = null; // Variable globale pour stocker la ligne bleue active
+
 function tracerItineraire(start, destination) {
   destinationActuelle = destination;
 
   if (routingControl) {
     map.removeControl(routingControl);
+    routingControl = null;
+  }
+  if (routePolyline) {
+    map.removeLayer(routePolyline);
+    routePolyline = null;
   }
 
   // --- 1. LECTURE DES OPTIONS ---
@@ -114,7 +125,6 @@ function tracerItineraire(start, destination) {
   const mapboxToken =
     "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 
-  // On utilise l'instance officielle pour garder toutes les propriétés internes intactes
   const routerMapbox = L.Routing.osrmv1({
     serviceUrl: "https://api.mapbox.com/directions/v5",
     profile: "mapbox/driving",
@@ -145,12 +155,14 @@ function tracerItineraire(start, destination) {
       L.latLng(destination.lat, destination.lng),
     ],
     router: routerMapbox,
+    language: "fr",
     show: false,
     routeWhileDragging: false,
     fitSelectedRoutes: false,
     addWaypoints: false,
+    // On masque la ligne par défaut de Leaflet pour dessiner notre propre polyline interactive
     lineOptions: {
-      styles: [{ color: "#3498db", opacity: 0.85, weight: 7 }],
+      styles: [{ opacity: 0, weight: 0 }],
     },
     createMarker: function (i, wp, nWps) {
       if (i === nWps - 1) {
@@ -160,18 +172,39 @@ function tracerItineraire(start, destination) {
     },
   }).addTo(map);
 
-  // --- 4. AFFICHAGE DES RÉSULTATS ---
+  // --- 4. AFFICHAGE ET GESTION DES RÉSULTATS ---
   routingControl.on("routesfound", function (e) {
-    const activeRoute = e.routes[0];
-    afficherInfosTrajet(activeRoute.summary);
+    const routes = e.routes;
+    if (!routes || routes.length === 0) return;
 
-    const instructionsContainer = document.getElementById(
-      "instructions-container",
-    );
-    if (instructionsContainer) {
+    const instructionsContainer = document.getElementById("instructions-container");
+    if (!instructionsContainer) return;
+
+    // Fonction pour basculer dynamiquement d'une option à l'autre au clic
+    function afficherRouteSelectionnee(index) {
+      const activeRoute = routes[index];
+      
+      // Mettre à jour le dashboard et l'ETA
+      if (activeRoute.summary) {
+        afficherInfosTrajet(activeRoute.summary);
+      }
+
+      // Dessiner ou redessiner la ligne bleue sur la carte pour cette option
+      if (routePolyline) {
+        map.removeLayer(routePolyline);
+      }
+      if (activeRoute.coordinates) {
+        routePolyline = L.polyline(activeRoute.coordinates, {
+          color: "#3498db",
+          opacity: 0.85,
+          weight: 7,
+        }).addTo(map);
+      }
+
+      // Reconstruire entièrement la modale et les boutons de sélection
       instructionsContainer.innerHTML = "";
 
-      if (e.routes.length > 1) {
+      if (routes.length > 1) {
         const titleDiv = document.createElement("div");
         titleDiv.style.fontWeight = "bold";
         titleDiv.style.marginBottom = "8px";
@@ -183,23 +216,25 @@ function tracerItineraire(start, destination) {
         selectorContainer.style.gap = "8px";
         selectorContainer.style.marginBottom = "15px";
 
-        e.routes.forEach((route, index) => {
-          const distKm = (route.summary.totalDistance / 1000).toFixed(1);
-          const mins = Math.round(route.summary.totalTime / 60);
+        routes.forEach((route, idx) => {
+          const distKm = route.summary ? (route.summary.totalDistance / 1000).toFixed(1) : "0";
+          const mins = route.summary ? Math.round(route.summary.totalTime / 60) : "0";
 
           const btn = document.createElement("button");
-          btn.textContent = `Option ${index + 1} : ${distKm} km (${mins} min)`;
+          btn.textContent = `Option ${idx + 1} : ${distKm} km (${mins} min)`;
           btn.style.padding = "8px 12px";
           btn.style.border = "1px solid #3498db";
           btn.style.borderRadius = "6px";
-          btn.style.backgroundColor =
-            route === activeRoute ? "#3498db" : "#fff";
-          btn.style.color = route === activeRoute ? "#fff" : "#3498db";
+
+          const isSelected = idx === index;
+          btn.style.backgroundColor = isSelected ? "#3498db" : "#fff";
+          btn.style.color = isSelected ? "#fff" : "#3498db";
           btn.style.cursor = "pointer";
           btn.style.fontWeight = "bold";
 
+          // Au clic, on actualise la carte, l'ETA et la feuille de route pour cette option
           btn.onclick = () => {
-            routingControl.selectRoute(route);
+            afficherRouteSelectionnee(idx);
           };
 
           selectorContainer.appendChild(btn);
@@ -214,13 +249,27 @@ function tracerItineraire(start, destination) {
       listTitle.textContent = "Feuille de route :";
       instructionsContainer.appendChild(listTitle);
 
-      activeRoute.instructions.forEach((instruction) => {
+      const instructions = activeRoute.instructions || [];
+      instructions.forEach((instruction) => {
         const div = document.createElement("div");
         div.style.padding = "8px 0";
         div.style.borderBottom = "1px solid #eee";
-        div.innerHTML = `➡️ ${instruction.text} <small style="color:gray;">(${instruction.distance}m)</small>`;
+        const texteBrut = instruction.text || "Continuer";
+        const texteFr = traduireInstruction(texteBrut);
+        const distM = instruction.distance ? Math.round(instruction.distance) : 0;
+        div.innerHTML = `➡️ ${texteFr} <small style="color:gray;">(${distM}m)</small>`;
         instructionsContainer.appendChild(div);
       });
+    }
+
+    // Afficher l'option 1 par défaut au premier calcul
+    afficherRouteSelectionnee(0);
+
+    // Annonce vocale initiale
+    const firstInstructions = routes[0].instructions;
+    if (firstInstructions && firstInstructions.length > 0 && firstInstructions[0].text) {
+      const premiereConsigneFr = traduireInstruction(firstInstructions[0].text);
+      annoncerTexte("Itinéraire calculé. " + premiereConsigneFr);
     }
   });
 
@@ -347,17 +396,17 @@ function initMap(lat = 46.603354, lon = 1.888334) {
 window.addEventListener("DOMContentLoaded", () => {
   initMap();
 
-  if (map) {
-    map.on("click", function (e) {
-      if (!userMarker) {
-        alert(
-          "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
-        );
-        return;
-      }
-      tracerItineraire(userMarker.getLatLng(), e.latlng);
-    });
-  }
+  // if (map) {
+  //   map.on("click", function (e) {
+  //     if (!userMarker) {
+  //       alert(
+  //         "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
+  //       );
+  //       return;
+  //     }
+  //     tracerItineraire(userMarker.getLatLng(), e.latlng);
+  //   });
+  // }
 
   const btnStop = document.getElementById("btn-stop-nav");
   if (btnStop) {
@@ -379,7 +428,43 @@ window.addEventListener("DOMContentLoaded", () => {
       modal.style.display = "none";
     });
   }
+  // Gestion du clic sur le bouton Voix ON/OFF
+  const btnVoiceToggle = document.getElementById("btn-voice-toggle");
+  if (btnVoiceToggle) {
+    btnVoiceToggle.addEventListener("click", () => {
+      voiceGuidanceEnabled = !voiceGuidanceEnabled; // On inverse l'état (vrai/faux)
+      if (voiceGuidanceEnabled) {
+        btnVoiceToggle.textContent = "🔊 Voix : ON";
+        btnVoiceToggle.style.backgroundColor = "#27ae60"; // Passe en vert
+        annoncerTexte("Guidage vocal activé.");
+      } else {
+        btnVoiceToggle.textContent = "🔇 Voix : OFF";
+        btnVoiceToggle.style.backgroundColor = "#e74c3c"; // Passe en rouge
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.cancel(); // Coupe proprement la parole
+        }
+      }
+    });
+  }
+  // Recalculer l'itinéraire automatiquement si on coche/décoche les options de route
+  const checkPeage = document.getElementById("check-peage");
+  const checkAutoroute = document.getElementById("check-autoroute");
+
+  function actualiserFiltresRoute() {
+    if (destinationActuelle && userMarker) {
+      tracerItineraire(userMarker.getLatLng(), destinationActuelle);
+    }
+  }
+
+  if (checkPeage) {
+    checkPeage.addEventListener("change", actualiserFiltresRoute);
+  }
+  if (checkAutoroute) {
+    checkAutoroute.addEventListener("change", actualiserFiltresRoute);
+  }
 });
+
+
 
 // --- 4. GESTION DU SON D'ALERTE & SYNTHÈSE VOCALE ---
 function jouerBipAlerte() {
@@ -447,6 +532,17 @@ function getAlertColor(dist) {
   return "#27ae60";
 }
 
+function annoncerTexte(texte) {
+  // Si la voix est désactivée ou que le navigateur n'gère pas la synthèse, on s'arrête là
+  if (!voiceGuidanceEnabled || !("speechSynthesis" in window)) return;
+
+  window.speechSynthesis.cancel(); // Coupe la phrase précédente s'il y en a une en cours
+  const msg = new SpeechSynthesisUtterance(texte);
+  msg.lang = "fr-FR";
+  msg.rate = 1.1; // Vitesse de lecture un peu plus rapide
+  window.speechSynthesis.speak(msg);
+}
+
 // --- 6. INITIALISATION GPS ---
 const btnStart = document.getElementById("btn-start");
 if (btnStart) {
@@ -486,7 +582,22 @@ function demarrerGPS() {
         if (map) {
           map.setView([latitude, longitude], 17, { animate: true });
 
-          const cap = position.coords.heading || 0;
+          // Calcul mathématique du cap en fonction du déplacement réel
+          if (derniereLat !== null && derniereLon !== null) {
+            const dLat = latitude - derniereLat;
+            const dLon = longitude - derniereLon;
+            
+            // Si la voiture a bougé d'une distance suffisante pour éviter les micro-saccades
+            const distanceMouvement = Math.sqrt(dLat * dLat + dLon * dLon);
+            if (distanceMouvement > 0.000005) {
+              let angle = Math.atan2(dLon, dLat) * (180 / Math.PI);
+              dernierCap = (angle + 360) % 360;
+            }
+          }
+
+          // On mémorise la position pour le prochain calcul
+          derniereLat = latitude;
+          derniereLon = longitude;
 
           if (!userMarker) {
             userMarker = L.marker([latitude, longitude], {
@@ -502,7 +613,8 @@ function demarrerGPS() {
               /rotateZ\(.*?\)/g,
               "",
             );
-            userMarker._icon.style.transform = `${baseTransform} rotateZ(${cap}deg)`;
+            // On applique l'angle calculé en direct pendant que tu roules
+            userMarker._icon.style.transform = `${baseTransform} rotateZ(${dernierCap}deg)`;
           }
         }
 
@@ -581,4 +693,59 @@ function lancerFavori(lat, lng) {
   }
   const destination = { lat: lat, lng: lng };
   tracerItineraire(userMarker.getLatLng(), destination);
+}
+
+function traduireInstruction(texte) {
+  let t = texte;
+  t = t.replace(/Head north/gi, "Cap au nord");
+  t = t.replace(/Head south/gi, "Cap au sud");
+  t = t.replace(/Head east/gi, "Cap à l'est");
+  t = t.replace(/Head west/gi, "Cap à l'ouest");
+  t = t.replace(/Turn sharp right/gi, "Tournez franchement à droite");
+  t = t.replace(/Turn sharp left/gi, "Tournez franchement à gauche");
+  t = t.replace(/Turn slight right/gi, "Légère courbe à droite");
+  t = t.replace(/Turn slight left/gi, "Légère courbe à gauche");
+  t = t.replace(/Turn right/gi, "Tournez à droite");
+  t = t.replace(/Turn left/gi, "Tournez à gauche");
+  t = t.replace(/Make a slight right/gi, "Faites un léger virage à droite");
+  t = t.replace(/Make a slight left/gi, "Faites un léger virage à gauche");
+  t = t.replace(
+    /Take the ramp on the right/gi,
+    "Prenez la bretelle sur la droite",
+  );
+  t = t.replace(
+    /Take the ramp on the left/gi,
+    "Prenez la bretelle sur la gauche",
+  );
+  t = t.replace(/Take the ramp/gi, "Prenez la bretelle");
+  t = t.replace(/Take the exit/gi, "Prenez la sortie");
+  t = t.replace(/Merge onto/gi, "Rejoignez");
+  t = t.replace(/Merge left/gi, "Serrez à gauche");
+  t = t.replace(/Merge right/gi, "Serrez à droite");
+  t = t.replace(/Continue straight/gi, "Continuez tout droit");
+  t = t.replace(/Keep right/gi, "Restez à droite");
+  t = t.replace(/Keep left/gi, "Restez à gauche");
+  t = t.replace(
+    /Enter the traffic circle and take the 1st exit/gi,
+    "Entrez dans le rond-point et prenez la 1ère sortie",
+  );
+  t = t.replace(
+    /Enter the traffic circle and take the 2nd exit/gi,
+    "Entrez dans le rond-point et prenez la 2ème sortie",
+  );
+  t = t.replace(
+    /Enter the traffic circle and take the 3rd exit/gi,
+    "Entrez dans le rond-point et prenez la 3ème sortie",
+  );
+  t = t.replace(
+    /Enter the traffic circle and take the 4th exit/gi,
+    "Entrez dans le rond-point et prenez la 4ème sortie",
+  );
+  t = t.replace(/Enter the traffic circle/gi, "Entrez dans le rond-point");
+  t = t.replace(/At the traffic circle/gi, "Au rond-point");
+  t = t.replace(/At the end of the road/gi, "Au bout de la route");
+  t = t.replace(/onto/gi, "sur");
+  t = t.replace(/towards/gi, "vers");
+  t = t.replace(/You have arrived at your destination/gi, "Arrivée à destination");
+  return t;
 }
