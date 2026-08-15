@@ -500,11 +500,17 @@ function demarrerGPS() {
             userMarker._icon.style.transform = `${baseTransform} rotateZ(${cap}deg)`;
           }
 
+          // --- CORRECTION ---
+          // On ne met plus à jour les waypoints en temps réel ici pour éviter 
+          // de saturer l'API Mapbox (Rate Limit) et de faire planter le navigateur.
+          // La route tracée reste fixe sur la carte, mais ton marqueur GPS continuera d'avancer dessus !
+          /* 
           if (routingControl && destinationActuelle) {
             const waypoints = routingControl.getWaypoints();
             waypoints[0].latLng = L.latLng(latitude, longitude);
             routingControl.setWaypoints(waypoints);
           }
+          */
         }
 
         if (radarsDatabase.length > 0) {
