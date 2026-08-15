@@ -111,24 +111,29 @@ function tracerItineraire(start, destination) {
   if (sansAutoroute) exclusions.push("motorway");
 
   // --- 2. CONFIGURATION DE MAPBOX ---
-  // /!\ REMPLACEZ CETTE VALEUR PAR VOTRE CLÉ MAPBOX (pk.xxxx...)
-  const mapboxToken = "VOTRE_CLE_MAPBOX_ICI"; 
+  const mapboxToken = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ"; 
 
-  // On crée un routeur sur mesure pour injecter les exclusions Mapbox
   const routerMapbox = L.Routing.osrmv1({
     serviceUrl: "https://api.mapbox.com/directions/v5/mapbox/driving"
   });
 
-  // Astuce pour forcer Leaflet Routing Machine à envoyer les options de Mapbox
   routerMapbox.buildRouteUrl = function(waypoints, options) {
-    let url = L.Routing.OSRMv1.prototype.buildRouteUrl.call(this, waypoints, options);
-    url = url.split('?')[0]; // On retire les paramètres OSRM par défaut
-    url += "?access_token=" + mapboxToken;
-    url += "&overview=full&steps=true&alternatives=true&language=fr";
+    const wpPoints = waypoints.map(wp => `${wp.latLng.lng},${wp.latLng.lat}`).join(';');
+    let url = `https://api.mapbox.com/directions/v5/mapbox/driving/${wpPoints}`;
+    
+    let params = [
+      `access_token=${mapboxToken}`,
+      "overview=full",
+      "steps=true",
+      "alternatives=true",
+      "language=fr"
+    ];
+
     if (exclusions.length > 0) {
-      url += "&exclude=" + exclusions.join(",");
+      params.push(`exclude=${exclusions.join(",")}`);
     }
-    return url;
+
+    return url + "?" + params.join("&");
   };
 
   // --- 3. LANCEMENT DU CALCUL ---
@@ -137,8 +142,7 @@ function tracerItineraire(start, destination) {
       L.latLng(start.lat, start.lng),
       L.latLng(destination.lat, destination.lng),
     ],
-    // Si la clé Mapbox n'est pas encore renseignée, on utilise le routeur gratuit par défaut
-    router: mapboxToken !== "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ" ? routerMapbox : L.Routing.osrmv1(),
+    router: routerMapbox,
     language: "fr",
     show: false, 
     routeWhileDragging: false,
