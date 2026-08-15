@@ -34,6 +34,9 @@ let voiceGuidanceEnabled = false;
 let derniereLat = null;
 let derniereLon = null;
 let dernierCap = 0;
+let instructionsActuelles = [];
+let routeCoordinates = [];
+let indexInstructionActuelle = 0;
 
 const carIcon = L.icon({
   iconUrl: "voiture-removebg-preview.png",
@@ -177,13 +180,19 @@ function tracerItineraire(start, destination) {
     const routes = e.routes;
     if (!routes || routes.length === 0) return;
 
-    const instructionsContainer = document.getElementById("instructions-container");
+    const instructionsContainer = document.getElementById(
+      "instructions-container",
+    );
     if (!instructionsContainer) return;
 
     // Fonction pour basculer dynamiquement d'une option à l'autre au clic
     function afficherRouteSelectionnee(index) {
       const activeRoute = routes[index];
-      
+      // On stocke les instructions et les coordonnées pour le guidage en temps réel
+      instructionsActuelles = activeRoute.instructions || [];
+      routeCoordinates = activeRoute.coordinates || [];
+      indexInstructionActuelle = 1; // On commence à 1 car la 0 est déjà lue au démarrage
+
       // Mettre à jour le dashboard et l'ETA
       if (activeRoute.summary) {
         afficherInfosTrajet(activeRoute.summary);
@@ -217,8 +226,12 @@ function tracerItineraire(start, destination) {
         selectorContainer.style.marginBottom = "15px";
 
         routes.forEach((route, idx) => {
-          const distKm = route.summary ? (route.summary.totalDistance / 1000).toFixed(1) : "0";
-          const mins = route.summary ? Math.round(route.summary.totalTime / 60) : "0";
+          const distKm = route.summary
+            ? (route.summary.totalDistance / 1000).toFixed(1)
+            : "0";
+          const mins = route.summary
+            ? Math.round(route.summary.totalTime / 60)
+            : "0";
 
           const btn = document.createElement("button");
           btn.textContent = `Option ${idx + 1} : ${distKm} km (${mins} min)`;
@@ -256,7 +269,9 @@ function tracerItineraire(start, destination) {
         div.style.borderBottom = "1px solid #eee";
         const texteBrut = instruction.text || "Continuer";
         const texteFr = traduireInstruction(texteBrut);
-        const distM = instruction.distance ? Math.round(instruction.distance) : 0;
+        const distM = instruction.distance
+          ? Math.round(instruction.distance)
+          : 0;
         div.innerHTML = `➡️ ${texteFr} <small style="color:gray;">(${distM}m)</small>`;
         instructionsContainer.appendChild(div);
       });
@@ -265,11 +280,18 @@ function tracerItineraire(start, destination) {
     // Afficher l'option 1 par défaut au premier calcul
     afficherRouteSelectionnee(0);
 
-    // Annonce vocale initiale
+    // Annonce vocale initiale de la toute première consigne
     const firstInstructions = routes[0].instructions;
-    if (firstInstructions && firstInstructions.length > 0 && firstInstructions[0].text) {
+    if (
+      firstInstructions &&
+      firstInstructions.length > 0 &&
+      firstInstructions[0].text
+    ) {
       const premiereConsigneFr = traduireInstruction(firstInstructions[0].text);
       annoncerTexte("Itinéraire calculé. " + premiereConsigneFr);
+      instructionsActuelles = firstInstructions;
+      routeCoordinates = routes[0].coordinates || [];
+      indexInstructionActuelle = 1; // La prochaine sera la numéro 1
     }
   });
 
@@ -464,8 +486,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-
-
 // --- 4. GESTION DU SON D'ALERTE & SYNTHÈSE VOCALE ---
 function jouerBipAlerte() {
   if (!audioCtx) return;
@@ -586,7 +606,7 @@ function demarrerGPS() {
           if (derniereLat !== null && derniereLon !== null) {
             const dLat = latitude - derniereLat;
             const dLon = longitude - derniereLon;
-            
+
             // Si la voiture a bougé d'une distance suffisante pour éviter les micro-saccades
             const distanceMouvement = Math.sqrt(dLat * dLat + dLon * dLon);
             if (distanceMouvement > 0.000005) {
@@ -634,6 +654,33 @@ function demarrerGPS() {
               radarConcerne = radar;
             }
           });
+
+          // --- GUIDAGE VOCAL CONTINU EN TEMPS RÉEL ---
+          if (
+            instructionsActuelles.length > 0 &&
+            indexInstructionActuelle < instructionsActuelles.length
+          ) {
+            const inst = instructionsActuelles[indexInstructionActuelle];
+            const coordIndex = inst.index; // Position exacte du virage sur la ligne
+
+            if (routeCoordinates && routeCoordinates[coordIndex]) {
+              const targetPoint = routeCoordinates[coordIndex];
+              // On calcule la distance entre la voiture et le prochain virage
+              const distVersInstruction = calculerDistance(
+                latitude,
+                longitude,
+                targetPoint.lat,
+                targetPoint.lng,
+              );
+
+              // Si la voiture arrive à moins de 35 mètres de l'instruction
+              if (distVersInstruction <= 35) {
+                const texteFr = traduireInstruction(inst.text);
+                annoncerTexte(texteFr);
+                indexInstructionActuelle++; // On passe à l'instruction suivante
+              }
+            }
+          }
 
           const distanceArrondie = Math.round(plusProcheDistance);
 
@@ -746,6 +793,9 @@ function traduireInstruction(texte) {
   t = t.replace(/At the end of the road/gi, "Au bout de la route");
   t = t.replace(/onto/gi, "sur");
   t = t.replace(/towards/gi, "vers");
-  t = t.replace(/You have arrived at your destination/gi, "Arrivée à destination");
+  t = t.replace(
+    /You have arrived at your destination/gi,
+    "Arrivée à destination",
+  );
   return t;
 }
