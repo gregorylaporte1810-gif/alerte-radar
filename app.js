@@ -37,6 +37,9 @@ let dernierCap = 0;
 let instructionsActuelles = [];
 let routeCoordinates = [];
 let indexInstructionActuelle = 0;
+let heureArriveeEstimee = null;
+let distanceRestanteMetres = 0;
+let recalculEnCours = false;
 
 const carIcon = L.icon({
   iconUrl: "voiture-removebg-preview.png",
@@ -47,18 +50,20 @@ const carIcon = L.icon({
 // --- 2. FONCTIONS D'ITINÉRAIRE & NAVIGATION ---
 
 function afficherInfosTrajet(summary) {
-  const distanceKm = (summary.totalDistance / 1000).toFixed(1);
+  // On sauvegarde les données pour le décompte en temps réel
+  distanceRestanteMetres = summary.totalDistance;
+  const maintenant = new Date();
+  heureArriveeEstimee = new Date(
+    maintenant.getTime() + summary.totalTime * 1000,
+  );
+
+  const distanceKm = (distanceRestanteMetres / 1000).toFixed(1);
   const minutesTotales = Math.round(summary.totalTime / 60);
   const heures = Math.floor(minutesTotales / 60);
   const mins = minutesTotales % 60;
 
   let tempsTexte = heures > 0 ? `${heures}h ${mins}min` : `${mins} min`;
-
-  const maintenant = new Date();
-  const heureArrivee = new Date(
-    maintenant.getTime() + summary.totalTime * 1000,
-  );
-  const heureArriveeStr = heureArrivee.toLocaleTimeString([], {
+  const heureArriveeStr = heureArriveeEstimee.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -107,7 +112,7 @@ let routePolyline = null; // Variable globale pour stocker la ligne bleue active
 function tracerItineraire(start, destination) {
   destinationActuelle = destination;
   document.getElementById("favorites-bar").style.display = "none";
-document.getElementById("route-options").style.display = "none";
+  document.getElementById("route-options").style.display = "none";
 
   if (routingControl) {
     map.removeControl(routingControl);
@@ -309,7 +314,7 @@ function arreterGuidage() {
   }
   destinationActuelle = null;
   document.getElementById("favorites-bar").style.display = "flex";
-document.getElementById("route-options").style.display = "flex";
+  document.getElementById("route-options").style.display = "flex";
 
   const navControls = document.getElementById("navigation-controls");
   if (navControls) navControls.style.display = "none";
@@ -607,15 +612,84 @@ function demarrerGPS() {
           map.setView([latitude, longitude], 17, { animate: true });
 
           // Calcul mathématique du cap en fonction du déplacement réel
+          // Calcul mathématique du cap en fonction du déplacement réel
           if (derniereLat !== null && derniereLon !== null) {
             const dLat = latitude - derniereLat;
             const dLon = longitude - derniereLon;
+            const distanceParcourue = calculerDistance(
+              derniereLat,
+              derniereLon,
+              latitude,
+              longitude,
+            );
 
-            // Si la voiture a bougé d'une distance suffisante pour éviter les micro-saccades
-            const distanceMouvement = Math.sqrt(dLat * dLat + dLon * dLon);
-            if (distanceMouvement > 0.000005) {
+            // --- 1. DÉCOMPTE DU TEMPS ET DE LA DISTANCE ---
+            if (distanceRestanteMetres > 0 && distanceParcourue > 0) {
+              distanceRestanteMetres -= distanceParcourue; // On soustrait les mètres roulés
+              if (distanceRestanteMetres < 0) distanceRestanteMetres = 0;
+
+              if (heureArriveeEstimee) {
+                const maintenant = new Date();
+                let tempsRestantMs = heureArriveeEstimee - maintenant;
+                if (tempsRestantMs < 0) tempsRestantMs = 0;
+
+                const minutesRestantes = Math.round(tempsRestantMs / 60000);
+                const heures = Math.floor(minutesRestantes / 60);
+                const mins = minutesRestantes % 60;
+                const tempsTexte =
+                  heures > 0 ? `${heures}h ${mins}min` : `${mins} min`;
+                const distKm = (distanceRestanteMetres / 1000).toFixed(1);
+
+                // Mise à jour visuelle en direct
+                const etaValueEl = document.getElementById("eta-value");
+                if (etaValueEl) {
+                  etaValueEl.textContent = `${tempsTexte} (${distKm} km)`;
+                }
+              }
+            }
+
+            // --- 2. CALCUL DE L'ORIENTATION (CAP) ---
+            if (distanceParcourue > 0.5) {
+              // Uniquement si on a vraiment bougé d'un demi-mètre
               let angle = Math.atan2(dLon, dLat) * (180 / Math.PI);
               dernierCap = (angle + 360) % 360;
+            }
+          }
+
+          // --- 3. RECALCUL AUTOMATIQUE SI HORS ITINÉRAIRE ---
+          // Si on a une destination, une ligne bleue (routeCoordinates), et qu'on ne recalcule pas déjà
+          if (
+            destinationActuelle &&
+            typeof routeCoordinates !== "undefined" &&
+            routeCoordinates.length > 0 &&
+            !recalculEnCours
+          ) {
+            let distanceMin = Infinity;
+            // On vérifie la distance de la voiture avec la ligne bleue (un point sur 5 pour la performance)
+            for (let i = 0; i < routeCoordinates.length; i += 5) {
+              let d = calculerDistance(
+                latitude,
+                longitude,
+                routeCoordinates[i].lat,
+                routeCoordinates[i].lng,
+              );
+              if (d < distanceMin) distanceMin = d;
+            }
+
+            // Si la voiture s'éloigne de plus de 60 mètres du tracé prévu -> Recalcul !
+            if (distanceMin > 60) {
+              console.log("Hors itinéraire ! Recalcul en cours...");
+              recalculEnCours = true;
+              annoncerTexte("Recalcul de l'itinéraire.");
+              tracerItineraire(
+                L.latLng(latitude, longitude),
+                destinationActuelle,
+              );
+
+              // On bloque les autres recalculs pendant 10 secondes pour laisser le temps au réseau
+              setTimeout(() => {
+                recalculEnCours = false;
+              }, 10000);
             }
           }
 
