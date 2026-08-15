@@ -106,6 +106,8 @@ let routePolyline = null; // Variable globale pour stocker la ligne bleue active
 
 function tracerItineraire(start, destination) {
   destinationActuelle = destination;
+  document.getElementById("favorites-bar").style.display = "none";
+document.getElementById("route-options").style.display = "none";
 
   if (routingControl) {
     map.removeControl(routingControl);
@@ -306,6 +308,8 @@ function arreterGuidage() {
     routingControl = null;
   }
   destinationActuelle = null;
+  document.getElementById("favorites-bar").style.display = "flex";
+document.getElementById("route-options").style.display = "flex";
 
   const navControls = document.getElementById("navigation-controls");
   if (navControls) navControls.style.display = "none";

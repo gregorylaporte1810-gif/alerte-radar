@@ -125,8 +125,12 @@ h1 {
 
 /* --- ADAPTATION MOBILE & PAYSAGE --- */
 @media (max-width: 950px), (max-height: 500px) {
-  .dashboard {
-    padding: 4px 12px !important;
+  /* Masquer le titre et le statut GPS pour gagner de la place */
+  .header-top {
+    display: none !important;
+  }
+  header {
+    padding: 5px 10px !important;
   }
 
   /* Déplacement du guidage en pilule flottante en bas de la carte */
@@ -179,3 +183,4 @@ h1 {
   background: #3b82f6;
   border-color: #3b82f6;
 }
+
