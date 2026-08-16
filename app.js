@@ -19,6 +19,7 @@ document.addEventListener("visibilitychange", async () => {
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
 const API_URL = "https://alerte-radar.onrender.com/api/radars";
+let toleranceActive = localStorage.getItem('gps_tolerance') || '0';
 
 let map;
 let userMarker;
@@ -388,6 +389,36 @@ window.addEventListener("DOMContentLoaded", () => {
   chargerFavorisStorage();
   initMap();
 
+  const btnTheme = document.getElementById("btn-theme");
+  const isDarkMode = localStorage.getItem("gps_theme") === "dark";
+
+  if (isDarkMode) {
+    document.body.classList.add("dark-mode");
+    if (btnTheme) btnTheme.textContent = "☀️";
+  }
+
+  if (btnTheme) {
+    btnTheme.addEventListener("click", () => {
+      document.body.classList.toggle("dark-mode");
+      if (document.body.classList.contains("dark-mode")) {
+        localStorage.setItem("gps_theme", "dark");
+        btnTheme.textContent = "☀️";
+      } else {
+        localStorage.setItem("gps_theme", "light");
+        btnTheme.textContent = "🌙";
+      }
+    });
+  }
+
+  const selectTolerance = document.getElementById("tolerance-select");
+  if (selectTolerance) {
+    selectTolerance.value = toleranceActive;
+    selectTolerance.addEventListener("change", (e) => {
+      toleranceActive = e.target.value;
+      localStorage.setItem('gps_tolerance', toleranceActive);
+    });
+  }
+
   // --- GESTION DU RECENTRAGE MANUEL ---
   map.on("dragstart", function () {
     suiviAutoActif = false; // On désactive le suivi si l'utilisateur bouge la carte
@@ -572,8 +603,20 @@ function demarrerGPS() {
         const { latitude, longitude, speed } = position.coords;
         const vitesseKmH = speed ? Math.round(speed * 3.6) : 0;
 
-        if (currentSpeedEl)
-          currentSpeedEl.innerHTML = `${vitesseKmH} <small class="unit">km/h</small>`;
+        if (currentSpeedEl) {
+          currentSpeedEl.textContent = vitesseKmH;
+        }
+
+        // Animation du HUD Circulaire (circonférence = 314)
+        const speedGauge = document.getElementById("speed-gauge");
+        if (speedGauge) {
+          const maxSpeed = 180; 
+          let fillPercentage = vitesseKmH / maxSpeed;
+          if (fillPercentage > 1) fillPercentage = 1;
+          
+          const offset = 314 - (314 * fillPercentage);
+          speedGauge.style.strokeDashoffset = offset;
+        }
 
         if (suiviAutoActif) {
           map.setView([latitude, longitude], 17, { animate: true });
@@ -768,17 +811,28 @@ function demarrerGPS() {
             if (alertText)
               alertText.textContent = `⚠️ ${radarConcerne.nom} à ${formatDistance(distanceArrondie)} (Lim. ${radarConcerne.vitesseLimite} km/h)`;
 
-            // --- NOUVEAU : ALERTE DE SURVITESSE ---
+// --- NOUVEAU : ALERTE DE SURVITESSE ---
             const limiteVitesse = parseInt(radarConcerne.vitesseLimite);
-            if (!isNaN(limiteVitesse) && vitesseKmH > limiteVitesse) {
-              if (currentSpeedEl) {
-                currentSpeedEl.style.color = "#e74c3c"; // Rouge
-                currentSpeedEl.classList.add("clignotant");
-              }
+            let limiteToleree = limiteVitesse;
+
+            // Calcul de la marge
+            if (toleranceActive === '5') limiteToleree += 5;
+            if (toleranceActive === '10') limiteToleree += (limiteVitesse * 0.10);
+
+            if (!isNaN(limiteVitesse) && vitesseKmH > limiteToleree) {
+              // Survitesse détectée
+              if (currentSpeedEl) currentSpeedEl.style.color = "#e74c3c"; // Texte en rouge
+              if (speedGauge) speedGauge.style.stroke = "#e74c3c"; // Jauge en rouge écarlate
             } else {
-              if (currentSpeedEl) {
-                currentSpeedEl.style.color = ""; // Normal
-                currentSpeedEl.classList.remove("clignotant");
+              // Vitesse normale
+              if (currentSpeedEl) currentSpeedEl.style.color = "white";
+              if (speedGauge) {
+                // Si on est à moins de 5 km/h de la limite, jauge jaune d'avertissement, sinon verte
+                if (!isNaN(limiteVitesse) && vitesseKmH >= limiteVitesse - 5) {
+                  speedGauge.style.stroke = "#f1c40f"; // Jaune
+                } else {
+                  speedGauge.style.stroke = "#27ae60"; // Vert
+                }
               }
             }
 
