@@ -347,25 +347,6 @@ function initMap(lat = 46.603354, lon = 1.888334) {
     attribution: "© OpenStreetMap & CartoDB",
   }).addTo(map);
 
-  // --- BARRE DE RECHERCHE D'ADRESSE (GEOCODER) ---
-  if (L.Control.geocoder) {
-    L.Control.geocoder({
-      defaultMarkGeocode: false,
-      placeholder: "Rechercher une adresse...",
-      errorMessage: "Adresse introuvable",
-    })
-      .on("markgeocode", function (e) {
-        if (!userMarker) {
-          alert(
-            "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
-          );
-          return;
-        }
-        tracerItineraire(userMarker.getLatLng(), e.geocode.center);
-      })
-      .addTo(map);
-  }
-
   // --- CHARGEMENT DES RADARS DEPUIS LA NOUVELLE API ---
   fetch(API_URL)
     .then((response) => response.json())
@@ -406,18 +387,6 @@ function initMap(lat = 46.603354, lon = 1.888334) {
 window.addEventListener("DOMContentLoaded", () => {
   chargerFavorisStorage();
   initMap();
-
-  // if (map) {
-  //   map.on("click", function (e) {
-  //     if (!userMarker) {
-  //       alert(
-  //         "Veuillez d'abord lancer le GPS pour définir votre point de départ.",
-  //       );
-  //       return;
-  //     }
-  //     tracerItineraire(userMarker.getLatLng(), e.latlng);
-  //   });
-  // }
 
   // --- GESTION DU RECENTRAGE MANUEL ---
   map.on("dragstart", function () {
@@ -610,7 +579,6 @@ function demarrerGPS() {
           map.setView([latitude, longitude], 17, { animate: true });
 
           // Calcul mathématique du cap en fonction du déplacement réel
-          // Calcul mathématique du cap en fonction du déplacement réel
           if (derniereLat !== null && derniereLon !== null) {
             const dLat = latitude - derniereLat;
             const dLon = longitude - derniereLon;
@@ -655,7 +623,6 @@ function demarrerGPS() {
           }
 
           // --- 3. RECALCUL AUTOMATIQUE SI HORS ITINÉRAIRE ---
-          // Si on a une destination, une ligne bleue (routeCoordinates), et qu'on ne recalcule pas déjà
           if (
             destinationActuelle &&
             typeof routeCoordinates !== "undefined" &&
@@ -676,11 +643,8 @@ function demarrerGPS() {
 
             // Si la voiture s'éloigne de plus de 150 mètres des points du tracé -> Recalcul !
             if (distanceMin > 150) {
-              // J'ai monté la tolérance à 150 pour éviter les faux positifs
               console.log("Hors itinéraire ! Recalcul en cours en silence...");
               recalculEnCours = true;
-
-              // annoncerTexte("Recalcul de l'itinéraire."); // <-- LIGNE COMMENTÉE POUR LE SILENCE
 
               tracerItineraire(
                 L.latLng(latitude, longitude),
@@ -709,7 +673,6 @@ function demarrerGPS() {
                 );
                 arreterGuidage();
 
-                // Optionnel : tu peux vider la destination pour être sûr que ça ne reboucle pas
                 destinationActuelle = null;
               }
             }
@@ -952,5 +915,89 @@ function ajouterFavoriActuel(nomPersonnalise) {
   );
 }
 
-// Pour charger les favoris automatiquement au lancement, ajoute cette ligne dans ton window.addEventListener("DOMContentLoaded", () => { ... });
-// chargerFavorisStorage();
+// --- NOUVELLE BARRE DE RECHERCHE PERSONNALISÉE (MAPBOX) ---
+const searchInput = document.getElementById("custom-search-input");
+const searchResults = document.getElementById("custom-search-results");
+let searchTimeout = null;
+
+if (searchInput) {
+  searchInput.addEventListener("input", function () {
+    clearTimeout(searchTimeout); // Évite de faire une requête à chaque lettre tapée
+    const query = this.value;
+
+    if (query.length < 3) {
+      searchResults.style.display = "none";
+      return;
+    }
+
+    // On attend 300ms après la dernière frappe pour lancer la recherche
+    searchTimeout = setTimeout(() => {
+      // On réutilise ton token Mapbox existant
+      const mapboxToken =
+        "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
+
+      // Appel à l'API Mapbox (restreint à la France pour plus de précision)
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=fr&language=fr&autocomplete=true&limit=5`;
+
+      fetch(url)
+        .then((response) => response.json())
+        .then((data) => {
+          searchResults.innerHTML = "";
+          if (data.features && data.features.length > 0) {
+            searchResults.style.display = "block";
+
+            data.features.forEach((feature) => {
+              const li = document.createElement("li");
+              li.textContent = feature.place_name_fr; // Adresse complète formatée
+              li.style.padding = "12px 18px";
+              li.style.borderBottom = "1px solid #f0f0f0";
+              li.style.cursor = "pointer";
+              li.style.fontSize = "15px";
+              li.style.color = "#333";
+
+              // Effet de survol
+              li.addEventListener(
+                "mouseover",
+                () => (li.style.backgroundColor = "#f9f9f9"),
+              );
+              li.addEventListener(
+                "mouseout",
+                () => (li.style.backgroundColor = "transparent"),
+              );
+
+              // Clic sur une adresse
+              li.addEventListener("click", () => {
+                if (!userMarker) {
+                  alert(
+                    "Veuillez d'abord lancer le GPS (Activer le GPS) pour définir votre point de départ.",
+                  );
+                  return;
+                }
+                const [lng, lat] = feature.center; // Mapbox renvoie [Longitude, Latitude]
+                searchInput.value = feature.place_name_fr; // Remplit la barre avec l'adresse choisie
+                searchResults.style.display = "none"; // Cache la liste
+
+                // Lancement de l'itinéraire
+                tracerItineraire(userMarker.getLatLng(), {
+                  lat: lat,
+                  lng: lng,
+                });
+              });
+
+              searchResults.appendChild(li);
+            });
+          } else {
+            searchResults.style.display = "none";
+          }
+        })
+        .catch((err) => console.error("Erreur de recherche Mapbox :", err));
+    }, 300);
+  });
+
+  // Fermer la liste déroulante si on clique n'importe où ailleurs sur la carte
+  document.addEventListener("click", (e) => {
+    if (e.target !== searchInput && e.target !== searchResults) {
+      searchResults.style.display = "none";
+    }
+  });
+}
