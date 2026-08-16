@@ -18,7 +18,7 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
-const API_URL = "http://127.0.0.1:5000/api/radars";
+const API_URL = "https://alerte-radar.onrender.com/api/radars";
 
 let map;
 let userMarker;
