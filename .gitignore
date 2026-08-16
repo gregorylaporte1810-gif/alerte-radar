@@ -1,0 +1,15 @@
+# Dépendances Node
+node_modules/
+
+# Fichiers de build et caches Android
+android/app/build/
+android/.gradle/
+android/build/
+.gradle/
+
+# Environnement virtuel Python
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+backend/radars.db
