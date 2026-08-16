@@ -400,6 +400,7 @@ function initMap(lat = 46.603354, lon = 1.888334) {
       });
     })
     .catch((error) => console.error("Erreur connexion API radars :", error));
+  document.getElementById("loading-radars").style.display = "none";
 }
 
 window.addEventListener("DOMContentLoaded", () => {
