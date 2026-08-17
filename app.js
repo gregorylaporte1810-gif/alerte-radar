@@ -637,7 +637,12 @@ function demarrerGPS() {
         }
 
         if (suiviAutoActif) {
+          // Au lieu d'un setView brut qui centre mal, on centre et on décale légèrement la vue
+          // vers le haut pour que la voiture se place naturellement au milieu de l'espace libre de la carte
           map.setView([latitude, longitude], 17, { animate: true });
+
+          // Décale la vue de la carte de 60 pixels vers le bas pour réajuster visuellement la voiture au centre exact
+          map.panBy([0, 60], { animate: false });
 
           // Calcul mathématique du cap en fonction du déplacement réel
           if (derniereLat !== null && derniereLon !== null) {
