@@ -641,11 +641,21 @@ function demarrerGPS() {
         }
 
         if (suiviAutoActif) {
-          // Au lieu d'un setView brut qui centre mal, on centre et on décale légèrement la vue
-          map.setView([latitude, longitude], 17, { animate: true });
+          // 1. Calcul du déplacement réel entre l'ancienne position GPS et la nouvelle
+          const distanceDeplacement =
+            derniereLat !== null && derniereLon !== null
+              ? calculerDistance(derniereLat, derniereLon, latitude, longitude)
+              : 999;
 
-          // Augmente la valeur Y (ex: 150 ou 200) pour réajuster visuellement la voiture au-dessus des boutons
-          map.panBy([0, 150], { animate: false });
+          // 2. Anti-sursaut : on ne déplace la carte que si la voiture a vraiment avancé de plus de 2 mètres
+          if (distanceDeplacement > 2 || derniereLat === null) {
+            const zoom = 17;
+            const point = map.project([latitude, longitude], zoom);
+            point.y += 90; // Décale la vue pour placer la voiture dans le tiers inférieur de l'écran
+            const adjustedCenter = map.unproject(point, zoom);
+
+            map.panTo(adjustedCenter, { animate: true, duration: 0.5 });
+          }
 
           // Calcul mathématique du cap en fonction du déplacement réel
           if (derniereLat !== null && derniereLon !== null) {
