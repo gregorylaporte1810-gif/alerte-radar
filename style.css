@@ -342,23 +342,7 @@ body.dark-mode #main-header {
   }
 }
 
-/* --- STYLE DU CONTRÔLEUR DE MUSIQUE --- */
-@media (max-width: 1000px) {
-  #music-controller {
-    background: rgba(30, 39, 46, 0.7) !important;
-    backdrop-filter: blur(4px) !important;
-    opacity: 0.85;
-    transition: opacity 0.3s ease;
-  }
-  #music-controller:hover {
-    opacity: 1;
-  }
-  #music-play-pause {
-    width: 24px !important;
-    height: 24px !important;
-    font-size: 10px !important;
-  }
-}
+
 /* --- BARRE DE RECHERCHE (AVANT LE MODE ACTIF) --- */
 #custom-search-container {
   position: absolute !important;
