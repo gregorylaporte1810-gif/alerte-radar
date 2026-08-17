@@ -19,7 +19,7 @@ document.addEventListener("visibilitychange", async () => {
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
 const API_URL = "https://alerte-radar.onrender.com/api/radars";
-let toleranceActive = localStorage.getItem('gps_tolerance') || '0';
+let toleranceActive = localStorage.getItem("gps_tolerance") || "0";
 
 let map;
 let userMarker;
@@ -115,17 +115,30 @@ function tracerItineraire(start, destination) {
   document.getElementById("favorites-bar").style.display = "none";
   document.getElementById("route-options").style.display = "none";
 
+  // Active le mode navigation épurée
+  document.body.classList.add("nav-active");
+
+  // --- CORRECTION CENTRAGE LEAFLET ---
+  if (map) {
+    setTimeout(() => {
+      map.invalidateSize(); // Force Leaflet à recalculer la taille réelle de l'écran
+      if (userMarker) {
+        map.setView(userMarker.getLatLng(), 17, { animate: true });
+      }
+    }, 150); // Petit délai pour laisser le DOM se replier proprement
+  }
+
   if (routingControl) {
     map.removeControl(routingControl);
     routingControl = null;
   }
-  
+
   if (routePolyline) {
     map.removeLayer(routePolyline);
     routePolyline = null;
   }
   // Active le mode navigation épurée (masque le superflu et compacte l'îlot du haut)
-    document.body.classList.add("nav-active");
+  document.body.classList.add("nav-active");
 
   // --- 1. LECTURE DES OPTIONS ---
   const sansPeage = document.getElementById("check-peage")?.checked;
@@ -328,7 +341,7 @@ function arreterGuidage() {
   if (etaBox) etaBox.remove();
   if (etaSep) etaSep.remove();
   // Désactive le mode navigation épurée pour restaurer l'interface complète
-    document.body.classList.remove("nav-active");
+  document.body.classList.remove("nav-active");
 
   console.log("Guidage arrêté.");
 }
@@ -420,7 +433,7 @@ window.addEventListener("DOMContentLoaded", () => {
     selectTolerance.value = toleranceActive;
     selectTolerance.addEventListener("change", (e) => {
       toleranceActive = e.target.value;
-      localStorage.setItem('gps_tolerance', toleranceActive);
+      localStorage.setItem("gps_tolerance", toleranceActive);
     });
   }
 
@@ -615,11 +628,11 @@ function demarrerGPS() {
         // Animation du HUD Circulaire (circonférence = 314)
         const speedGauge = document.getElementById("speed-gauge");
         if (speedGauge) {
-          const maxSpeed = 180; 
+          const maxSpeed = 180;
           let fillPercentage = vitesseKmH / maxSpeed;
           if (fillPercentage > 1) fillPercentage = 1;
-          
-          const offset = 314 - (314 * fillPercentage);
+
+          const offset = 314 - 314 * fillPercentage;
           speedGauge.style.strokeDashoffset = offset;
         }
 
@@ -816,13 +829,13 @@ function demarrerGPS() {
             if (alertText)
               alertText.textContent = `⚠️ ${radarConcerne.nom} à ${formatDistance(distanceArrondie)} (Lim. ${radarConcerne.vitesseLimite} km/h)`;
 
-// --- NOUVEAU : ALERTE DE SURVITESSE ---
+            // --- NOUVEAU : ALERTE DE SURVITESSE ---
             const limiteVitesse = parseInt(radarConcerne.vitesseLimite);
             let limiteToleree = limiteVitesse;
 
             // Calcul de la marge
-            if (toleranceActive === '5') limiteToleree += 5;
-            if (toleranceActive === '10') limiteToleree += (limiteVitesse * 0.10);
+            if (toleranceActive === "5") limiteToleree += 5;
+            if (toleranceActive === "10") limiteToleree += limiteVitesse * 0.1;
 
             if (!isNaN(limiteVitesse) && vitesseKmH > limiteToleree) {
               // Survitesse détectée
@@ -1093,7 +1106,9 @@ if (prevBtn) {
   prevBtn.addEventListener("click", () => {
     if ("mediaSession" in navigator) {
       try {
-        navigator.mediaSession.setPositionState ? navigator.mediaSession.setPositionState() : null;
+        navigator.mediaSession.setPositionState
+          ? navigator.mediaSession.setPositionState()
+          : null;
         // Demande au système de passer au morceau précédent
         if (navigator.mediaSession.metadata) {
           console.log("Action : Morceau précédent");
@@ -1119,11 +1134,11 @@ if (nextBtn) {
 
 // Synchronisation automatique avec l'état audio global du téléphone
 if ("mediaSession" in navigator) {
-  navigator.mediaSession.setActionHandler('play', function() {
+  navigator.mediaSession.setActionHandler("play", function () {
     isPlaying = true;
     if (playPauseBtn) playPauseBtn.textContent = "⏸️";
   });
-  navigator.mediaSession.setActionHandler('pause', function() {
+  navigator.mediaSession.setActionHandler("pause", function () {
     isPlaying = false;
     if (playPauseBtn) playPauseBtn.textContent = "▶️";
   });
