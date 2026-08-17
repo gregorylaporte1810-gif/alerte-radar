@@ -401,3 +401,60 @@ body.nav-active .dashboard {
   margin: 0 !important;
   padding: 0 !important;
 }
+
+/* --- ADAPTATION MODE PAYSAGE (LANDSCAPE) --- */
+@media screen and (orientation: landscape) {
+  /* Réduire la taille du panneau supérieur */
+  #main-header .dashboard {
+    padding: 6px 15px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* Forcer la pilule et masquer le débordement */
+  #navigation-controls {
+    bottom: 15px !important;
+    left: auto !important;
+    right: 15px !important;
+    transform: none !important;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px !important;
+    border-radius: 25px !important;
+    width: max-content !important;
+    max-width: none !important;
+    background: rgba(30, 39, 46, 0.95) !important;
+    backdrop-filter: blur(8px) !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
+    overflow: hidden !important; /* Empêche les éléments de dépasser visuellement */
+  }
+
+  /* Taille uniforme et compacte des boutons de contrôle */
+  #navigation-controls button {
+    height: 36px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 13px !important;
+    padding: 0 8px !important;
+    border-radius: 18px !important;
+    border: none !important;
+    cursor: pointer !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* Bouton détails et son carrés/ronds */
+  #btn-details, #btn-voice-toggle {
+    width: 36px !important;
+    padding: 0 !important;
+  }
+
+  /* Bouton Stop compact */
+  #btn-stop-nav {
+    width: auto !important;
+    padding: 0 10px !important;
+    font-weight: bold !important;
+  }
+}
