@@ -333,9 +333,11 @@ body.dark-mode #main-header {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
     border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 8px 12px !important; /* Réduit un peu le padding pour compacter */
+     padding-left: 55px !important; /* Laisse de la place à gauche pour le panneau rond */
   }
 
   /* Adaptation du fond du menu réglages quand il est ouvert dans l'île flottante */
+
   #main-header details > div {
     background: rgba(11, 19, 43, 0.95) !important;
     border-radius: 0 0 12px 12px;
@@ -458,3 +460,18 @@ body.nav-active .dashboard {
     font-weight: bold !important;
   }
 }
+
+/* --- INTÉGRATION PROPRE DU PANNEAU DE VITESSE DANS L'ÎLOT --- */
+#main-header {
+  position: relative !important; /* Permet de caler le panneau par rapport au header */
+}
+
+#speed-limit-sign {
+  position: absolute !important;
+  top: -12px !important;
+  left: 12px !important;
+  z-index: 1010 !important;
+  display: flex !important; /* S'assure qu'il est visible s'il y a une limitation */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4) !important;
+}
+
