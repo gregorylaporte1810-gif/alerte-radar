@@ -18,7 +18,7 @@ body {
 /* Le header qui va changer de couleur (Vert, Orange, Rouge) */
 header {
   padding: 15px;
-  background-color: #27ae60; /* Vert par défaut */
+  background-color: #27ae60;
   transition: background-color 0.5s ease;
   box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
@@ -137,7 +137,6 @@ h1 {
     padding: 5px 10px !important;
   }
 
-  /* Déplacement du guidage en pilule flottante en bas de la carte */
   #navigation-controls {
     position: fixed !important;
     bottom: 20px !important;
@@ -163,7 +162,6 @@ h1 {
   background: #0b132b;
   overflow-x: auto;
   white-space: nowrap;
-  /* Masquer la barre de défilement pour faire plus propre */
   -ms-overflow-style: none;  
   scrollbar-width: none;  
 }
@@ -189,7 +187,6 @@ h1 {
   border-color: #3b82f6;
 }
 
-/* Animation de clignotement pour la survitesse */
 .clignotant {
   animation: clignote 0.5s infinite;
 }
@@ -197,7 +194,6 @@ h1 {
   50% { opacity: 0; }
 }
 
-/* Bouton de recentrage flottant */
 #btn-recentrer {
   display: none;
   position: absolute;
@@ -231,11 +227,9 @@ body.dark-mode #main-header {
   background-color: #2c3e50 !important;
 }
 
-/* --- OPTIMISATIONS EXTRÊMES POUR ÉCRANS MOBILES / PAYSAGE --- */
 @media (max-width: 1000px) {
-  /* Force l'affichage et la réduction de la barre de titre */
   .header-top {
-    margin-bottom: 4px !important; /* Resserre le haut */
+    margin-bottom: 4px !important;
   }
   .header-top h1 {
     font-size: 16px !important;
@@ -252,7 +246,6 @@ body.dark-mode #main-header {
     padding: 3px 6px !important;
   }
   
-  /* Affinage du header vert */
   .dashboard {
     padding: 5px !important;
     gap: 5px !important;
@@ -265,20 +258,6 @@ body.dark-mode #main-header {
     margin-bottom: 2px !important;
   }
   
-  /* Réduction drastique de la jauge HUD de vitesse */
-  #speed-hud {
-    width: 65px !important;
-    height: 65px !important;
-  }
-  #speed-hud svg {
-    width: 65px !important;
-    height: 65px !important;
-  }
-  #current-speed {
-    font-size: 18px !important;
-  }
-  
-  /* Ajustement de la taille du texte pour les distances et temps */
   .dashboard .value {
     font-size: 1.1rem !important;
   }
@@ -286,9 +265,8 @@ body.dark-mode #main-header {
     font-size: 1.1rem !important;
   }
   
-  /* Ajustement de la barre de recherche */
   #custom-search-container {
-    top: 135px !important; /* Position idéale sous l'îlot */
+    top: 135px !important;
     width: 90% !important;
     max-width: 480px !important;
   }
@@ -301,13 +279,12 @@ body.dark-mode #main-header {
     padding: 8px 15px !important;
     font-size: 14px !important;
   }
-  /* Le conteneur principal devient la référence absolue */
+
   .app-container {
     position: relative !important;
     height: 100dvh !important;
   }
 
-  /* La carte s'étale sur 100% de la hauteur de l'écran en arrière-plan */
   #map {
     position: absolute !important;
     top: 0 !important;
@@ -317,10 +294,8 @@ body.dark-mode #main-header {
     z-index: 1 !important;
   }
 
-  /* Le header devient une île flottante semi-transparente */
   #main-header {
     position: absolute !important;
-    /* La règle 'max' ici règle tout : si il y a une encoche, il se décale, sinon il reste à 10px */
     top: max(env(safe-area-inset-top), 10px) !important; 
     left: 50% !important;
     transform: translateX(-50%) !important;
@@ -332,17 +307,15 @@ body.dark-mode #main-header {
     border-radius: 16px !important;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 8px 12px !important; /* Réduit un peu le padding pour compacter */
+    padding: 8px 12px !important;
   }
 
-  /* Adaptation du fond du menu réglages quand il est ouvert dans l'île flottante */
   #main-header details > div {
     background: rgba(11, 19, 43, 0.95) !important;
     border-radius: 0 0 12px 12px;
   }
 }
 
-/* --- STYLE DU CONTRÔLEUR DE MUSIQUE --- */
 @media (max-width: 1000px) {
   #music-controller {
     background: rgba(30, 39, 46, 0.7) !important;
@@ -359,10 +332,10 @@ body.dark-mode #main-header {
     font-size: 10px !important;
   }
 }
-/* --- BARRE DE RECHERCHE (AVANT LE MODE ACTIF) --- */
+
 #custom-search-container {
   position: absolute !important;
-  top: 195px !important; /* Positionnée juste en dessous du grand header initial */
+  top: 195px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   width: 90% !important;
@@ -382,11 +355,10 @@ body.dark-mode #main-header {
   border: none !important;
 }
 
-/* --- QUAND LA NAVIGATION EST ACTIVE (.nav-active), on la masque pour garder l'écran épuré --- */
 body.nav-active #custom-search-container {
   display: none !important;
 }
-/* --- MODE NAVIGATION ACTIVE (ÉPURÉ & HAUT) --- */
+
 body.nav-active #main-header .header-top,
 body.nav-active #main-header .btn-start,
 body.nav-active #main-header details,
@@ -416,4 +388,15 @@ body.nav-active .dashboard {
   align-items: center !important;
   margin: 0 !important;
   padding: 0 !important;
+}
+
+/* --- MODE NAVIGATION ACTIVE (CARTE AJUSTÉE AU CENTRE VISIBLE) --- */
+body.nav-active #map {
+  top: 90px !important;       
+  bottom: 140px !important;    
+  height: auto !important;
+  position: absolute !important;
+  left: 0 !important;
+  width: 100% !important;
+  z-index: 1 !important;
 }
