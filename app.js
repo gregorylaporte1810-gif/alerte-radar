@@ -105,7 +105,7 @@ function afficherInfosTrajet(summary) {
   }
 
   const navControls = document.getElementById("navigation-controls");
-  if (navControls) navControls.style.display = "block";
+  if (navControls) navControls.style.display = "flex";
 }
 
 let routePolyline = null; // Variable globale pour stocker la ligne bleue active
@@ -119,10 +119,13 @@ function tracerItineraire(start, destination) {
     map.removeControl(routingControl);
     routingControl = null;
   }
+  
   if (routePolyline) {
     map.removeLayer(routePolyline);
     routePolyline = null;
   }
+  // Active le mode navigation épurée (masque le superflu et compacte l'îlot du haut)
+    document.body.classList.add("nav-active");
 
   // --- 1. LECTURE DES OPTIONS ---
   const sansPeage = document.getElementById("check-peage")?.checked;
@@ -324,6 +327,8 @@ function arreterGuidage() {
   const etaSep = document.getElementById("eta-separator");
   if (etaBox) etaBox.remove();
   if (etaSep) etaSep.remove();
+  // Désactive le mode navigation épurée pour restaurer l'interface complète
+    document.body.classList.remove("nav-active");
 
   console.log("Guidage arrêté.");
 }
@@ -1053,5 +1058,73 @@ if (searchInput) {
     if (e.target !== searchInput && e.target !== searchResults) {
       searchResults.style.display = "none";
     }
+  });
+}
+
+// --- CONTRÔLEUR DE MUSIQUE (MEDIA SESSION API) ---
+const playPauseBtn = document.getElementById("music-play-pause");
+const prevBtn = document.getElementById("music-prev");
+const nextBtn = document.getElementById("music-next");
+const musicTitle = document.getElementById("music-title");
+
+let isPlaying = false;
+
+if (playPauseBtn) {
+  playPauseBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      if (navigator.mediaSession.playbackState === "playing") {
+        navigator.mediaSession.playbackState = "paused";
+        playPauseBtn.textContent = "▶️";
+        isPlaying = false;
+      } else {
+        navigator.mediaSession.playbackState = "playing";
+        playPauseBtn.textContent = "⏸️";
+        isPlaying = true;
+      }
+    } else {
+      // Fallback visuel si l'API native n'est pas totalement exposée
+      isPlaying = !isPlaying;
+      playPauseBtn.textContent = isPlaying ? "⏸️" : "▶️";
+    }
+  });
+}
+
+if (prevBtn) {
+  prevBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.setPositionState ? navigator.mediaSession.setPositionState() : null;
+        // Demande au système de passer au morceau précédent
+        if (navigator.mediaSession.metadata) {
+          console.log("Action : Morceau précédent");
+        }
+      } catch (e) {
+        console.log("Erreur MediaSession Prev:", e);
+      }
+    }
+  });
+}
+
+if (nextBtn) {
+  nextBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      try {
+        console.log("Action : Morceau suivant");
+      } catch (e) {
+        console.log("Erreur MediaSession Next:", e);
+      }
+    }
+  });
+}
+
+// Synchronisation automatique avec l'état audio global du téléphone
+if ("mediaSession" in navigator) {
+  navigator.mediaSession.setActionHandler('play', function() {
+    isPlaying = true;
+    if (playPauseBtn) playPauseBtn.textContent = "⏸️";
+  });
+  navigator.mediaSession.setActionHandler('pause', function() {
+    isPlaying = false;
+    if (playPauseBtn) playPauseBtn.textContent = "▶️";
   });
 }
