@@ -317,21 +317,22 @@ body.dark-mode #main-header {
     z-index: 1 !important;
   }
 
-  /* Le header devient une île flottante semi-transparente par-dessus la carte */
+  /* Le header devient une île flottante semi-transparente */
   #main-header {
     position: absolute !important;
-    top: 8px !important;
+    /* La règle 'max' ici règle tout : si il y a une encoche, il se décale, sinon il reste à 10px */
+    top: max(env(safe-area-inset-top), 10px) !important; 
     left: 50% !important;
     transform: translateX(-50%) !important;
     width: 95% !important;
-    max-width: 520px !important;
+    max-width: 550px !important;
     z-index: 1000 !important;
-    background-color: rgba(39, 174, 96, 0.92) !important;
+    background-color: rgba(30, 39, 46, 0.92) !important;
     backdrop-filter: blur(8px) !important;
-    border-radius: 12px !important;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5) !important;
     border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 4px 8px !important; /* Réduit l'épaisseur du header */
+    padding: 8px 12px !important; /* Réduit un peu le padding pour compacter */
   }
 
   /* Adaptation du fond du menu réglages quand il est ouvert dans l'île flottante */
