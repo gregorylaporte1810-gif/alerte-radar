@@ -121,11 +121,15 @@ function tracerItineraire(start, destination) {
   // --- CORRECTION CENTRAGE LEAFLET ---
   if (map) {
     setTimeout(() => {
-      map.invalidateSize(); // Force Leaflet à recalculer la taille réelle de l'écran
+      map.invalidateSize(); // Force Leaflet à recalculer la taille réelle de l'écran[cite: 3]
       if (userMarker) {
         map.setView(userMarker.getLatLng(), 17, { animate: true });
+
+        // AJOUT DU DÉCALAGE ICI :
+        // On remonte visuellement la voiture de 150px pour ne pas être cachée par les contrôles
+        map.panBy([0, 150], { animate: false });
       }
-    }, 150); // Petit délai pour laisser le DOM se replier proprement
+    }, 150); // Petit délai pour laisser le DOM se replier proprement[cite: 3]
   }
 
   if (routingControl) {
@@ -638,11 +642,10 @@ function demarrerGPS() {
 
         if (suiviAutoActif) {
           // Au lieu d'un setView brut qui centre mal, on centre et on décale légèrement la vue
-          // vers le haut pour que la voiture se place naturellement au milieu de l'espace libre de la carte
           map.setView([latitude, longitude], 17, { animate: true });
 
-          // Décale la vue de la carte de 60 pixels vers le bas pour réajuster visuellement la voiture au centre exact
-          map.panBy([0, 60], { animate: false });
+          // Augmente la valeur Y (ex: 150 ou 200) pour réajuster visuellement la voiture au-dessus des boutons
+          map.panBy([0, 150], { animate: false });
 
           // Calcul mathématique du cap en fonction du déplacement réel
           if (derniereLat !== null && derniereLon !== null) {
