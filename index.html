@@ -6,25 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Alerte Radar Live</title>
 
-  <!-- 1. CSS et JS Leaflet de base -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- 1. CSS et JS Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
 
-  <!-- 2. CSS et JS Leaflet Routing Machine -->
-  <link rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
-  <script
-    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
-
-  <!-- 3. CSS et JS Leaflet Control Geocoder -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
-  <!-- 4. Tes fichiers personnels -->
+  <!-- 2. Tes fichiers personnels -->
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="data:,">
 </head>
 
 <body>
@@ -86,17 +77,26 @@
       </div>
 
       <!-- MENU RÉGLAGES & FAVORIS INTÉGRÉ DANS LE HEADER -->
-      <details style="margin-top: 15px; background: rgba(11, 19, 43, 0.6); border-top: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; outline: none;">
-        <summary style="padding: 10px; cursor: pointer; font-weight: bold; text-align: center; list-style: none; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 13px;">
+      <details
+        style="margin-top: 15px; background: rgba(11, 19, 43, 0.6); border-top: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; outline: none;">
+        <summary
+          style="padding: 10px; cursor: pointer; font-weight: bold; text-align: center; list-style: none; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 13px;">
           ⚙️ Réglages & Favoris <span style="font-size: 0.8em; opacity: 0.7;">▼</span>
         </summary>
-        
+
         <div style="padding: 10px; background: rgba(11, 19, 43, 0.95); border-radius: 0 0 8px 8px;">
           <!-- Barre de favoris -->
-          <div id="favorites-bar" style="display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; padding-bottom: 8px;">
-            <button class="btn-favori" onclick="lancerFavori(48.20169367284245, 2.5496722189161316)" style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🏠 Maison (Ichy)</button>
-            <button class="btn-favori" onclick="lancerFavori(48.469749, 2.695799)" style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🏠 37 rue Moreau de Tours</button>
-            <button class="btn-favori" onclick="lancerFavori(48.8566, 2.3522)" style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🗼 Paris</button>
+          <div id="favorites-bar"
+            style="display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; padding-bottom: 8px;">
+            <button class="btn-favori" onclick="lancerFavori(48.20169367284245, 2.5496722189161316)"
+              style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🏠
+              Maison (Ichy)</button>
+            <button class="btn-favori" onclick="lancerFavori(48.469749, 2.695799)"
+              style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🏠
+              37 rue Moreau de Tours</button>
+            <button class="btn-favori" onclick="lancerFavori(48.8566, 2.3522)"
+              style="padding: 4px 10px; border-radius: 15px; border: none; background: #34495e; color: white; font-size: 11px;">🗼
+              Paris</button>
           </div>
 
           <!-- Options d'itinéraire -->
@@ -112,7 +112,8 @@
           <!-- Options de tolérance Radar -->
           <div style="text-align: center;">
             <label for="tolerance-select" style="font-size: 12px; color: white;">Tolérance radar : </label>
-            <select id="tolerance-select" style="background: #2c3e50; color: white; border: none; padding: 3px 6px; border-radius: 4px; outline: none; font-size: 12px;">
+            <select id="tolerance-select"
+              style="background: #2c3e50; color: white; border: none; padding: 3px 6px; border-radius: 4px; outline: none; font-size: 12px;">
               <option value="0">Stricte (+0 km/h)</option>
               <option value="5">Marge (+5 km/h)</option>
               <option value="10">Autoroute (+10%)</option>
@@ -151,18 +152,21 @@
 
 
     <!-- Carte -->
-    <div id="map">
-      <!-- NOUVELLE BARRE DE RECHERCHE PERSONNALISÉE -->
-      <div id="custom-search-container"
-        style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 450px;">
-        <input type="text" id="custom-search-input" placeholder="Où va-t-on ?"
-          style="width: 100%; padding: 14px 18px; border-radius: 25px; border: none; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); outline: none; font-family: sans-serif;">
-        <ul id="custom-search-results"
-          style="list-style: none; padding: 0; margin: 8px 0 0 0; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); max-height: 250px; overflow-y: auto; display: none; font-family: sans-serif;">
-        </ul>
-      </div>
-      <button id="btn-recentrer">📍 Recentrer</button>
+    <div id="map"></div> <!-- La balise map est maintenant vide et fermée immédiatement -->
+
+    <!-- NOUVELLE BARRE DE RECHERCHE PERSONNALISÉE (Déplacée en dehors de #map) -->
+    <div id="custom-search-container"
+      style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 450px;">
+      <input type="text" id="custom-search-input" placeholder="Où va-t-on ?"
+        style="width: 100%; padding: 14px 18px; border-radius: 25px; border: none; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); outline: none; font-family: sans-serif;">
+      <ul id="custom-search-results"
+        style="list-style: none; padding: 0; margin: 8px 0 0 0; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); max-height: 250px; overflow-y: auto; display: none; font-family: sans-serif;">
+      </ul>
     </div>
+
+    <button id="btn-recentrer" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000;">📍
+      Recentrer</button>
+  </div> <!-- Fin de app-container -->
   </div>
 
   <script>

@@ -19,15 +19,17 @@ document.addEventListener("visibilitychange", async () => {
 
 // --- 1. CONFIGURATION & ÉTAT GLOBAL ---
 const API_URL = "https://alerte-radar.onrender.com/api/radars";
+const MAPBOX_TOKEN = "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
 let toleranceActive = localStorage.getItem("gps_tolerance") || "0";
 
 let map;
 let userMarker;
+let userCarElement;
+let destMarker = null;
 let radarMarkers = [];
 let radarsDatabase = [];
 let audioCtx;
 let dernierBipTime = 0;
-let routingControl = null;
 let destinationActuelle = null;
 let derniereAnnonceVocale = 0;
 let voiceGuidanceEnabled = false;
@@ -35,31 +37,22 @@ let derniereLat = null;
 let derniereLon = null;
 let dernierCap = 0;
 let instructionsActuelles = [];
-let routeCoordinates = [];
+let routeCoordinates = []; // [[lng, lat], ...]
 let indexInstructionActuelle = 0;
 let heureArriveeEstimee = null;
 let distanceRestanteMetres = 0;
 let recalculEnCours = false;
-let suiviAutoActif = true; // Gère le recentrage de la carte
-
-const carIcon = L.icon({
-  iconUrl: "voiture-removebg-preview.png",
-  iconSize: [35, 35],
-  iconAnchor: [17, 17],
-});
+let suiviAutoActif = true;
 
 // --- 2. FONCTIONS D'ITINÉRAIRE & NAVIGATION ---
 
 function afficherInfosTrajet(summary) {
-  // On sauvegarde les données pour le décompte en temps réel
-  distanceRestanteMetres = summary.totalDistance;
+  distanceRestanteMetres = summary.distance;
   const maintenant = new Date();
-  heureArriveeEstimee = new Date(
-    maintenant.getTime() + summary.totalTime * 1000,
-  );
+  heureArriveeEstimee = new Date(maintenant.getTime() + summary.duration * 1000);
 
   const distanceKm = (distanceRestanteMetres / 1000).toFixed(1);
-  const minutesTotales = Math.round(summary.totalTime / 60);
+  const minutesTotales = Math.round(summary.duration / 60);
   const heures = Math.floor(minutesTotales / 60);
   const mins = minutesTotales % 60;
 
@@ -98,53 +91,41 @@ function afficherInfosTrajet(summary) {
   }
 
   if (etaBox) {
-    document.getElementById("eta-label").textContent =
-      `Arrivée à ${heureArriveeStr}`;
-    document.getElementById("eta-value").textContent =
-      `${tempsTexte} (${distanceKm} km)`;
+    document.getElementById("eta-label").textContent = `Arrivée à ${heureArriveeStr}`;
+    document.getElementById("eta-value").textContent = `${tempsTexte} (${distanceKm} km)`;
   }
 
   const navControls = document.getElementById("navigation-controls");
   if (navControls) navControls.style.display = "flex";
 }
 
-let routePolyline = null; // Variable globale pour stocker la ligne bleue active
-
 function tracerItineraire(start, destination) {
   destinationActuelle = destination;
   document.getElementById("favorites-bar").style.display = "none";
   document.getElementById("route-options").style.display = "none";
-
-  // Active le mode navigation épurée
   document.body.classList.add("nav-active");
 
-  // --- CORRECTION CENTRAGE LEAFLET ---
   if (map) {
     setTimeout(() => {
-      map.invalidateSize(); // Force Leaflet à recalculer la taille réelle de l'écran[cite: 3]
+      map.resize();
       if (userMarker) {
-        map.setView(userMarker.getLatLng(), 17, { animate: true });
-
-        // AJOUT DU DÉCALAGE ICI :
-        // On remonte visuellement la voiture de 150px pour ne pas être cachée par les contrôles
-        map.panBy([0, 150], { animate: false });
+        const coords = userMarker.getLngLat();
+        map.easeTo({
+          center: [coords.lng, coords.lat],
+          zoom: 17,
+          pitch: 60,
+          bearing: dernierCap,
+          duration: 1000
+        });
       }
-    }, 150); // Petit délai pour laisser le DOM se replier proprement[cite: 3]
+    }, 150);
   }
 
-  if (routingControl) {
-    map.removeControl(routingControl);
-    routingControl = null;
-  }
+  if (destMarker) destMarker.remove();
+  destMarker = new mapboxgl.Marker({ color: "#e74c3c" })
+    .setLngLat([destination.lng, destination.lat])
+    .addTo(map);
 
-  if (routePolyline) {
-    map.removeLayer(routePolyline);
-    routePolyline = null;
-  }
-  // Active le mode navigation épurée (masque le superflu et compacte l'îlot du haut)
-  document.body.classList.add("nav-active");
-
-  // --- 1. LECTURE DES OPTIONS ---
   const sansPeage = document.getElementById("check-peage")?.checked;
   const sansAutoroute = document.getElementById("check-autoroute")?.checked;
 
@@ -152,187 +133,148 @@ function tracerItineraire(start, destination) {
   if (sansPeage) exclusions.push("toll");
   if (sansAutoroute) exclusions.push("motorway");
 
-  // --- 2. CONFIGURATION MAPBOX SÉCURISÉE ---
-  const mapboxToken =
-    "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
+  let url = `https://api.mapbox.com/directions/v5/mapbox/driving/${start.lng},${start.lat};${destination.lng},${destination.lat}?access_token=${MAPBOX_TOKEN}&geometries=geojson&overview=full&steps=true&language=fr`;
 
-  const routerMapbox = L.Routing.osrmv1({
-    serviceUrl: "https://api.mapbox.com/directions/v5",
-    profile: "mapbox/driving",
-  });
+  if (exclusions.length > 0) {
+    url += `&exclude=${exclusions.join(",")}&alternatives=false`;
+  } else {
+    url += `&alternatives=true`;
+  }
 
-  routerMapbox.buildRouteUrl = function (waypoints, options) {
-    const coords = waypoints
-      .map((wp) => `${wp.latLng.lng},${wp.latLng.lat}`)
-      .join(";");
-    let url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?access_token=${mapboxToken}`;
+  fetch(url)
+    .then((res) => res.json())
+    .then((data) => {
+      if (!data.routes || data.routes.length === 0) return;
 
-    url += "&geometries=polyline&overview=full&steps=true&language=fr";
+      const routes = data.routes;
+      const instructionsContainer = document.getElementById("instructions-container");
 
-    if (exclusions.length > 0) {
-      url += `&exclude=${exclusions.join(",")}`;
-      url += "&alternatives=false";
-    } else {
-      url += "&alternatives=true";
-    }
+      function afficherRouteSelectionnee(index) {
+        const activeRoute = routes[index];
+        routeCoordinates = activeRoute.geometry.coordinates;
+        
+        instructionsActuelles = [];
+        if (activeRoute.legs && activeRoute.legs[0] && activeRoute.legs[0].steps) {
+          instructionsActuelles = activeRoute.legs[0].steps.map((step) => ({
+            text: step.maneuver.instruction,
+            distance: step.distance,
+            location: step.maneuver.location
+          }));
+        }
 
-    return url;
-  };
+        indexInstructionActuelle = 1;
 
-  // --- 3. LANCEMENT DU CALCUL ---
-  routingControl = L.Routing.control({
-    waypoints: [
-      L.latLng(start.lat, start.lng),
-      L.latLng(destination.lat, destination.lng),
-    ],
-    router: routerMapbox,
-    language: "fr",
-    show: false,
-    routeWhileDragging: false,
-    fitSelectedRoutes: false,
-    addWaypoints: false,
-    // On masque la ligne par défaut de Leaflet pour dessiner notre propre polyline interactive
-    lineOptions: {
-      styles: [{ opacity: 0, weight: 0 }],
-    },
-    createMarker: function (i, wp, nWps) {
-      if (i === nWps - 1) {
-        return L.marker(wp.latLng);
-      }
-      return null;
-    },
-  }).addTo(map);
-
-  // --- 4. AFFICHAGE ET GESTION DES RÉSULTATS ---
-  routingControl.on("routesfound", function (e) {
-    const routes = e.routes;
-    if (!routes || routes.length === 0) return;
-
-    const instructionsContainer = document.getElementById(
-      "instructions-container",
-    );
-    if (!instructionsContainer) return;
-
-    // Fonction pour basculer dynamiquement d'une option à l'autre au clic
-    function afficherRouteSelectionnee(index) {
-      const activeRoute = routes[index];
-      // On stocke les instructions et les coordonnées pour le guidage en temps réel
-      instructionsActuelles = activeRoute.instructions || [];
-      routeCoordinates = activeRoute.coordinates || [];
-      indexInstructionActuelle = 1; // On commence à 1 car la 0 est déjà lue au démarrage
-
-      // Mettre à jour le dashboard et l'ETA
-      if (activeRoute.summary) {
-        afficherInfosTrajet(activeRoute.summary);
-      }
-
-      // Dessiner ou redessiner la ligne bleue sur la carte pour cette option
-      if (routePolyline) {
-        map.removeLayer(routePolyline);
-      }
-      if (activeRoute.coordinates) {
-        routePolyline = L.polyline(activeRoute.coordinates, {
-          color: "#3498db",
-          opacity: 0.85,
-          weight: 7,
-        }).addTo(map);
-      }
-
-      // Reconstruire entièrement la modale et les boutons de sélection
-      instructionsContainer.innerHTML = "";
-
-      if (routes.length > 1) {
-        const titleDiv = document.createElement("div");
-        titleDiv.style.fontWeight = "bold";
-        titleDiv.style.marginBottom = "8px";
-        titleDiv.textContent = "Choisir un itinéraire :";
-        instructionsContainer.appendChild(titleDiv);
-
-        const selectorContainer = document.createElement("div");
-        selectorContainer.style.display = "flex";
-        selectorContainer.style.gap = "8px";
-        selectorContainer.style.marginBottom = "15px";
-
-        routes.forEach((route, idx) => {
-          const distKm = route.summary
-            ? (route.summary.totalDistance / 1000).toFixed(1)
-            : "0";
-          const mins = route.summary
-            ? Math.round(route.summary.totalTime / 60)
-            : "0";
-
-          const btn = document.createElement("button");
-          btn.textContent = `Option ${idx + 1} : ${distKm} km (${mins} min)`;
-          btn.style.padding = "8px 12px";
-          btn.style.border = "1px solid #3498db";
-          btn.style.borderRadius = "6px";
-
-          const isSelected = idx === index;
-          btn.style.backgroundColor = isSelected ? "#3498db" : "#fff";
-          btn.style.color = isSelected ? "#fff" : "#3498db";
-          btn.style.cursor = "pointer";
-          btn.style.fontWeight = "bold";
-
-          // Au clic, on actualise la carte, l'ETA et la feuille de route pour cette option
-          btn.onclick = () => {
-            afficherRouteSelectionnee(idx);
-          };
-
-          selectorContainer.appendChild(btn);
+        afficherInfosTrajet({
+          distance: activeRoute.distance,
+          duration: activeRoute.duration
         });
 
-        instructionsContainer.appendChild(selectorContainer);
+        dessinerRouteSurCarte(activeRoute.geometry);
+
+        if (!instructionsContainer) return;
+        instructionsContainer.innerHTML = "";
+
+        if (routes.length > 1) {
+          const titleDiv = document.createElement("div");
+          titleDiv.style.fontWeight = "bold";
+          titleDiv.style.marginBottom = "8px";
+          titleDiv.textContent = "Choisir un itinéraire :";
+          instructionsContainer.appendChild(titleDiv);
+
+          const selectorContainer = document.createElement("div");
+          selectorContainer.style.display = "flex";
+          selectorContainer.style.gap = "8px";
+          selectorContainer.style.marginBottom = "15px";
+
+          routes.forEach((route, idx) => {
+            const distKm = (route.distance / 1000).toFixed(1);
+            const mins = Math.round(route.duration / 60);
+
+            const btn = document.createElement("button");
+            btn.textContent = `Option ${idx + 1} : ${distKm} km (${mins} min)`;
+            btn.style.padding = "8px 12px";
+            btn.style.border = "1px solid #3498db";
+            btn.style.borderRadius = "6px";
+
+            const isSelected = idx === index;
+            btn.style.backgroundColor = isSelected ? "#3498db" : "#fff";
+            btn.style.color = isSelected ? "#fff" : "#3498db";
+            btn.style.cursor = "pointer";
+            btn.style.fontWeight = "bold";
+
+            btn.onclick = () => afficherRouteSelectionnee(idx);
+            selectorContainer.appendChild(btn);
+          });
+
+          instructionsContainer.appendChild(selectorContainer);
+        }
+
+        const listTitle = document.createElement("div");
+        listTitle.style.fontWeight = "bold";
+        listTitle.style.marginBottom = "8px";
+        listTitle.textContent = "Feuille de route :";
+        instructionsContainer.appendChild(listTitle);
+
+        instructionsActuelles.forEach((inst) => {
+          const div = document.createElement("div");
+          div.style.padding = "8px 0";
+          div.style.borderBottom = "1px solid #eee";
+          const distM = Math.round(inst.distance);
+          div.innerHTML = `➡️ ${inst.text} <small style="color:gray;">(${distM}m)</small>`;
+          instructionsContainer.appendChild(div);
+        });
       }
 
-      const listTitle = document.createElement("div");
-      listTitle.style.fontWeight = "bold";
-      listTitle.style.marginBottom = "8px";
-      listTitle.textContent = "Feuille de route :";
-      instructionsContainer.appendChild(listTitle);
+      afficherRouteSelectionnee(0);
 
-      const instructions = activeRoute.instructions || [];
-      instructions.forEach((instruction) => {
-        const div = document.createElement("div");
-        div.style.padding = "8px 0";
-        div.style.borderBottom = "1px solid #eee";
-        const texteBrut = instruction.text || "Continuer";
-        const texteFr = traduireInstruction(texteBrut);
-        const distM = instruction.distance
-          ? Math.round(instruction.distance)
-          : 0;
-        div.innerHTML = `➡️ ${texteFr} <small style="color:gray;">(${distM}m)</small>`;
-        instructionsContainer.appendChild(div);
-      });
-    }
+      if (instructionsActuelles.length > 0) {
+        annoncerTexte("Itinéraire calculé. " + instructionsActuelles[0].text);
+      }
+    })
+    .catch((err) => console.error("Erreur calcul itinéraire Mapbox :", err));
+}
 
-    // Afficher l'option 1 par défaut au premier calcul
-    afficherRouteSelectionnee(0);
+function dessinerRouteSurCarte(geometry) {
+  const geojson = {
+    type: "Feature",
+    properties: {},
+    geometry: geometry
+  };
 
-    // Annonce vocale initiale de la toute première consigne
-    const firstInstructions = routes[0].instructions;
-    if (
-      firstInstructions &&
-      firstInstructions.length > 0 &&
-      firstInstructions[0].text
-    ) {
-      const premiereConsigneFr = traduireInstruction(firstInstructions[0].text);
-      annoncerTexte("Itinéraire calculé. " + premiereConsigneFr);
-      instructionsActuelles = firstInstructions;
-      routeCoordinates = routes[0].coordinates || [];
-      indexInstructionActuelle = 1; // La prochaine sera la numéro 1
-    }
-  });
+  if (map.getSource("route")) {
+    map.getSource("route").setData(geojson);
+  } else {
+    map.addSource("route", {
+      type: "geojson",
+      data: geojson
+    });
 
-  routingControl.on("routingerror", function (e) {
-    console.error("Erreur de guidage :", e);
-  });
+    map.addLayer({
+      id: "route",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round"
+      },
+      paint: {
+        "line-color": "#3498db",
+        "line-width": 8,
+        "line-opacity": 0.85
+      }
+    });
+  }
 }
 
 function arreterGuidage() {
-  if (routingControl) {
-    map.removeControl(routingControl);
-    routingControl = null;
+  if (map.getLayer("route")) map.removeLayer("route");
+  if (map.getSource("route")) map.removeSource("route");
+
+  if (destMarker) {
+    destMarker.remove();
+    destMarker = null;
   }
+
   destinationActuelle = null;
   document.getElementById("favorites-bar").style.display = "flex";
   document.getElementById("route-options").style.display = "flex";
@@ -344,67 +286,79 @@ function arreterGuidage() {
   const etaSep = document.getElementById("eta-separator");
   if (etaBox) etaBox.remove();
   if (etaSep) etaSep.remove();
-  // Désactive le mode navigation épurée pour restaurer l'interface complète
   document.body.classList.remove("nav-active");
+
+  if (derniereLat !== null && derniereLon !== null) {
+    map.easeTo({
+      center: [derniereLon, derniereLat],
+      zoom: 15,
+      pitch: 0,
+      bearing: 0,
+      duration: 1000
+    });
+  }
 
   console.log("Guidage arrêté.");
 }
 
-// --- 3. INITIALISATION CARTE & ÉCOUTEURS ---
+// --- 3. INITIALISATION CARTE MAPBOX GL JS ---
 function initMap(lat = 46.603354, lon = 1.888334) {
   const mapContainer = document.getElementById("map");
   if (!mapContainer) return;
 
-  map = L.map("map").setView([lat, lon], 13);
+  mapboxgl.accessToken = MAPBOX_TOKEN;
 
-  // --- DÉTECTION JOUR / NUIT ---
   const heureActuelle = new Date().getHours();
   const estNuit = heureActuelle >= 20 || heureActuelle < 7;
+  const styleUrl = estNuit
+    ? "mapbox://styles/mapbox/navigation-night-v1"
+    : "mapbox://styles/mapbox/navigation-day-v1";
 
-  const tileUrl = estNuit
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  map = new mapboxgl.Map({
+    container: "map",
+    style: styleUrl,
+    center: [lon, lat],
+    zoom: 16,
+    pitch: 60, // Inclinaison 3D cockpit
+    bearing: 0,
+    antialias: true
+  });
 
-  L.tileLayer(tileUrl, {
-    maxZoom: 19,
-    attribution: "© OpenStreetMap & CartoDB",
-  }).addTo(map);
-
-  // --- CHARGEMENT DES RADARS DEPUIS LA NOUVELLE API ---
-  fetch(API_URL)
-    .then((response) => response.json())
-    .then((data) => {
-      radarsDatabase = data
-        .map((item) => {
-          return {
+  map.on("load", () => {
+    fetch(API_URL)
+      .then((response) => response.json())
+      .then((data) => {
+        radarsDatabase = data
+          .map((item) => ({
             id: item.id,
             type: item.type,
             dateMiseEnService: item.date_mise_en_service,
-            vitesseLimite:
-              item.vitesse_limite === "NA" ? "NA" : item.vitesse_limite,
+            vitesseLimite: item.vitesse_limite === "NA" ? "NA" : item.vitesse_limite,
             lat: parseFloat(item.lat),
             lon: parseFloat(item.lon),
-            nom: `${item.type} (${item.id})`,
-          };
-        })
-        .filter((radar) => !isNaN(radar.lat) && !isNaN(radar.lon));
+            nom: `${item.type} (${item.id})`
+          }))
+          .filter((radar) => !isNaN(radar.lat) && !isNaN(radar.lon));
 
-      console.log(
-        "Radars chargés depuis l'API locale SQL :",
-        radarsDatabase.length,
-      );
+        console.log("Radars chargés depuis l'API :", radarsDatabase.length);
 
-      radarsDatabase.forEach((radar) => {
-        const marker = L.marker([radar.lat, radar.lon])
-          .addTo(map)
-          .bindPopup(
-            `<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`,
+        radarsDatabase.forEach((radar) => {
+          const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(
+            `<b>${radar.nom}</b><br>Limite : ${radar.vitesseLimite} km/h`
           );
-        radarMarkers.push(marker);
-      });
-    })
-    .catch((error) => console.error("Erreur connexion API radars :", error));
-  document.getElementById("loading-radars").style.display = "none";
+          const marker = new mapboxgl.Marker({ color: "#e74c3c" })
+            .setLngLat([radar.lon, radar.lat])
+            .setPopup(popup)
+            .addTo(map);
+
+          radarMarkers.push(marker);
+        });
+      })
+      .catch((error) => console.error("Erreur connexion API radars :", error));
+
+    const loader = document.getElementById("loading-radars");
+    if (loader) loader.style.display = "none";
+  });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -422,12 +376,16 @@ window.addEventListener("DOMContentLoaded", () => {
   if (btnTheme) {
     btnTheme.addEventListener("click", () => {
       document.body.classList.toggle("dark-mode");
-      if (document.body.classList.contains("dark-mode")) {
-        localStorage.setItem("gps_theme", "dark");
-        btnTheme.textContent = "☀️";
-      } else {
-        localStorage.setItem("gps_theme", "light");
-        btnTheme.textContent = "🌙";
+      const isDark = document.body.classList.contains("dark-mode");
+      localStorage.setItem("gps_theme", isDark ? "dark" : "light");
+      btnTheme.textContent = isDark ? "☀️" : "🌙";
+
+      if (map) {
+        map.setStyle(
+          isDark
+            ? "mapbox://styles/mapbox/navigation-night-v1"
+            : "mapbox://styles/mapbox/navigation-day-v1"
+        );
       }
     });
   }
@@ -441,9 +399,15 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- GESTION DU RECENTRAGE MANUEL ---
-  map.on("dragstart", function () {
-    suiviAutoActif = false; // On désactive le suivi si l'utilisateur bouge la carte
+  // RECENTRAGE MANUEL
+  document.getElementById("map")?.addEventListener("mousedown", () => {
+    suiviAutoActif = false;
+    const btnRecentrer = document.getElementById("btn-recentrer");
+    if (btnRecentrer) btnRecentrer.style.display = "block";
+  });
+
+  document.getElementById("map")?.addEventListener("touchstart", () => {
+    suiviAutoActif = false;
     const btnRecentrer = document.getElementById("btn-recentrer");
     if (btnRecentrer) btnRecentrer.style.display = "block";
   });
@@ -451,10 +415,16 @@ window.addEventListener("DOMContentLoaded", () => {
   const btnRecentrer = document.getElementById("btn-recentrer");
   if (btnRecentrer) {
     btnRecentrer.addEventListener("click", () => {
-      suiviAutoActif = true; // On réactive le suivi
+      suiviAutoActif = true;
       btnRecentrer.style.display = "none";
       if (derniereLat !== null && derniereLon !== null) {
-        map.setView([derniereLat, derniereLon], 17, { animate: true });
+        map.easeTo({
+          center: [derniereLon, derniereLat],
+          zoom: 17,
+          pitch: 60,
+          bearing: dernierCap,
+          duration: 500
+        });
       }
     });
   }
@@ -479,40 +449,37 @@ window.addEventListener("DOMContentLoaded", () => {
       modal.style.display = "none";
     });
   }
-  // Gestion du clic sur le bouton Voix ON/OFF
+
   const btnVoiceToggle = document.getElementById("btn-voice-toggle");
   if (btnVoiceToggle) {
     btnVoiceToggle.addEventListener("click", () => {
-      voiceGuidanceEnabled = !voiceGuidanceEnabled; // On inverse l'état (vrai/faux)
+      voiceGuidanceEnabled = !voiceGuidanceEnabled;
       if (voiceGuidanceEnabled) {
         btnVoiceToggle.textContent = "🔊 Voix : ON";
-        btnVoiceToggle.style.backgroundColor = "#27ae60"; // Passe en vert
+        btnVoiceToggle.style.backgroundColor = "#27ae60";
         annoncerTexte("Guidage vocal activé.");
       } else {
         btnVoiceToggle.textContent = "🔇 Voix : OFF";
-        btnVoiceToggle.style.backgroundColor = "#e74c3c"; // Passe en rouge
+        btnVoiceToggle.style.backgroundColor = "#e74c3c";
         if ("speechSynthesis" in window) {
-          window.speechSynthesis.cancel(); // Coupe proprement la parole
+          window.speechSynthesis.cancel();
         }
       }
     });
   }
-  // Recalculer l'itinéraire automatiquement si on coche/décoche les options de route
+
   const checkPeage = document.getElementById("check-peage");
   const checkAutoroute = document.getElementById("check-autoroute");
 
   function actualiserFiltresRoute() {
     if (destinationActuelle && userMarker) {
-      tracerItineraire(userMarker.getLatLng(), destinationActuelle);
+      const pos = userMarker.getLngLat();
+      tracerItineraire({ lat: pos.lat, lng: pos.lng }, destinationActuelle);
     }
   }
 
-  if (checkPeage) {
-    checkPeage.addEventListener("change", actualiserFiltresRoute);
-  }
-  if (checkAutoroute) {
-    checkAutoroute.addEventListener("change", actualiserFiltresRoute);
-  }
+  if (checkPeage) checkPeage.addEventListener("change", actualiserFiltresRoute);
+  if (checkAutoroute) checkAutoroute.addEventListener("change", actualiserFiltresRoute);
 });
 
 // --- 4. GESTION DU SON D'ALERTE & SYNTHÈSE VOCALE ---
@@ -566,6 +533,33 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+// Calcule la vraie distance par rapport au tracé de la route
+function distancePointSegment(lat, lon, lat1, lon1, lat2, lon2) {
+  const R = 6371e3;
+  const rad = Math.PI / 180;
+  
+  // Approximation plane pour de courtes distances
+  const x0 = lon * rad * Math.cos(lat * rad);
+  const y0 = lat * rad;
+  const x1 = lon1 * rad * Math.cos(lat1 * rad);
+  const y1 = lat1 * rad;
+  const x2 = lon2 * rad * Math.cos(lat2 * rad);
+  const y2 = lat2 * rad;
+
+  const l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+  if (l2 === 0) return calculerDistance(lat, lon, lat1, lon1);
+
+  let t = ((x0 - x1) * (x2 - x1) + (y0 - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+
+  const projX = x1 + t * (x2 - x1);
+  const projY = y1 + t * (y2 - y1);
+
+  const projLat = projY / rad;
+  const projLon = projX / rad / Math.cos(lat * rad);
+
+  return calculerDistance(lat, lon, projLat, projLon);
+}
 
 function formatDistance(meters) {
   if (meters >= 1000) {
@@ -582,17 +576,16 @@ function getAlertColor(dist) {
 }
 
 function annoncerTexte(texte) {
-  // Si la voix est désactivée ou que le navigateur n'gère pas la synthèse, on s'arrête là
   if (!voiceGuidanceEnabled || !("speechSynthesis" in window)) return;
 
-  window.speechSynthesis.cancel(); // Coupe la phrase précédente s'il y en a une en cours
+  window.speechSynthesis.cancel();
   const msg = new SpeechSynthesisUtterance(texte);
   msg.lang = "fr-FR";
-  msg.rate = 1.1; // Vitesse de lecture un peu plus rapide
+  msg.rate = 1.1;
   window.speechSynthesis.speak(msg);
 }
 
-// --- 6. INITIALISATION GPS ---
+// --- 6. INITIALISATION GPS & SUIVI TEMPS RÉEL ---
 const btnStart = document.getElementById("btn-start");
 if (btnStart) {
   btnStart.addEventListener("click", function () {
@@ -629,7 +622,6 @@ function demarrerGPS() {
           currentSpeedEl.textContent = vitesseKmH;
         }
 
-        // Animation du HUD Circulaire (circonférence = 314)
         const speedGauge = document.getElementById("speed-gauge");
         if (speedGauge) {
           const maxSpeed = 180;
@@ -640,143 +632,141 @@ function demarrerGPS() {
           speedGauge.style.strokeDashoffset = offset;
         }
 
-        if (suiviAutoActif) {
-          // 1. Calcul du déplacement réel entre l'ancienne position GPS et la nouvelle
-          const distanceDeplacement =
-            derniereLat !== null && derniereLon !== null
-              ? calculerDistance(derniereLat, derniereLon, latitude, longitude)
-              : 999;
+        if (derniereLat !== null && derniereLon !== null) {
+          const dLat = latitude - derniereLat;
+          const dLon = longitude - derniereLon;
+          const distanceParcourue = calculerDistance(
+            derniereLat,
+            derniereLon,
+            latitude,
+            longitude
+          );
 
-          // 2. Anti-sursaut : on ne déplace la carte que si la voiture a vraiment avancé de plus de 2 mètres
-          if (distanceDeplacement > 2 || derniereLat === null) {
-            const zoom = 17;
-            const point = map.project([latitude, longitude], zoom);
-            point.y += 90; // Décale la vue pour placer la voiture dans le tiers inférieur de l'écran
-            const adjustedCenter = map.unproject(point, zoom);
+          if (distanceRestanteMetres > 0 && distanceParcourue > 0) {
+            distanceRestanteMetres -= distanceParcourue;
+            if (distanceRestanteMetres < 0) distanceRestanteMetres = 0;
 
-            map.panTo(adjustedCenter, { animate: true, duration: 0.5 });
+            if (heureArriveeEstimee) {
+              const maintenant = new Date();
+              let tempsRestantMs = heureArriveeEstimee - maintenant;
+              if (tempsRestantMs < 0) tempsRestantMs = 0;
+
+              const minutesRestantes = Math.round(tempsRestantMs / 60000);
+              const heures = Math.floor(minutesRestantes / 60);
+              const mins = minutesRestantes % 60;
+              const tempsTexte = heures > 0 ? `${heures}h ${mins}min` : `${mins} min`;
+              const distKm = (distanceRestanteMetres / 1000).toFixed(1);
+
+              const etaValueEl = document.getElementById("eta-value");
+              if (etaValueEl) {
+                etaValueEl.textContent = `${tempsTexte} (${distKm} km)`;
+              }
+            }
           }
 
-          // Calcul mathématique du cap en fonction du déplacement réel
-          if (derniereLat !== null && derniereLon !== null) {
-            const dLat = latitude - derniereLat;
-            const dLon = longitude - derniereLon;
-            const distanceParcourue = calculerDistance(
-              derniereLat,
-              derniereLon,
+          if (distanceParcourue > 0.5) {
+            let angle = Math.atan2(dLon, dLat) * (180 / Math.PI);
+            dernierCap = (angle + 360) % 360;
+          }
+        }
+
+// --- CAMÉRA 3D COCKPIT EN TEMPS RÉEL ---
+        if (suiviAutoActif && map) {
+          map.easeTo({
+            center: [longitude, latitude],
+            zoom: 17,
+            pitch: 60,
+            bearing: dernierCap,
+            duration: 1000,  // Synchronisé avec la vitesse de rafraîchissement du GPS
+            easing: (t) => t // Mouvement linéaire pur (supprime l'effet élastique)
+          });
+        }
+
+// --- RECALCUL SI HORS ITINÉRAIRE ---
+        if (
+          destinationActuelle &&
+          routeCoordinates.length > 1 &&
+          !recalculEnCours
+        ) {
+          let distanceMin = Infinity;
+          
+          // On compare la position aux LIGNES de la route, pas juste aux points
+          for (let i = 0; i < routeCoordinates.length - 1; i++) {
+            let pt1 = routeCoordinates[i];
+            let pt2 = routeCoordinates[i+1];
+            
+            let d = distancePointSegment(latitude, longitude, pt1[1], pt1[0], pt2[1], pt2[0]);
+            if (d < distanceMin) distanceMin = d;
+          }
+
+          // Si on s'écarte de plus de 75 mètres du vrai tracé
+          if (distanceMin > 75) { 
+            console.log("Hors itinéraire ! Recalcul en cours...");
+            recalculEnCours = true;
+
+            tracerItineraire(
+              { lat: latitude, lng: longitude },
+              destinationActuelle
+            );
+
+            // On attend 10 secondes minimum avant de s'autoriser un autre recalcul
+            setTimeout(() => {
+              recalculEnCours = false;
+            }, 10000);
+          }
+
+          const distanceFinale = calculerDistance(
+            latitude,
+            longitude,
+            destinationActuelle.lat,
+            destinationActuelle.lng
+          );
+
+          if (distanceFinale <= 50) {
+            annoncerTexte("Vous êtes arrivé à destination. Fin du guidage.");
+            arreterGuidage();
+          }
+        }
+
+        derniereLat = latitude;
+        derniereLon = longitude;
+
+        if (!userMarker) {
+          userCarElement = document.createElement("div");
+          userCarElement.style.width = "40px";
+          userCarElement.style.height = "40px";
+          userCarElement.style.backgroundImage = "url('voiture-removebg-preview.png')";
+          userCarElement.style.backgroundSize = "contain";
+          userCarElement.style.backgroundRepeat = "no-repeat";
+          userCarElement.style.backgroundPosition = "center";
+
+          userMarker = new mapboxgl.Marker({
+            element: userCarElement,
+            rotationAlignment: "map"
+          })
+            .setLngLat([longitude, latitude])
+            .addTo(map);
+        } else {
+          userMarker.setLngLat([longitude, latitude]);
+        }
+
+        if (
+          instructionsActuelles.length > 0 &&
+          indexInstructionActuelle < instructionsActuelles.length
+        ) {
+          const inst = instructionsActuelles[indexInstructionActuelle];
+          if (inst.location) {
+            const distVersInst = calculerDistance(
               latitude,
               longitude,
+              inst.location[1],
+              inst.location[0]
             );
 
-            // --- 1. DÉCOMPTE DU TEMPS ET DE LA DISTANCE ---
-            if (distanceRestanteMetres > 0 && distanceParcourue > 0) {
-              distanceRestanteMetres -= distanceParcourue; // On soustrait les mètres roulés
-              if (distanceRestanteMetres < 0) distanceRestanteMetres = 0;
-
-              if (heureArriveeEstimee) {
-                const maintenant = new Date();
-                let tempsRestantMs = heureArriveeEstimee - maintenant;
-                if (tempsRestantMs < 0) tempsRestantMs = 0;
-
-                const minutesRestantes = Math.round(tempsRestantMs / 60000);
-                const heures = Math.floor(minutesRestantes / 60);
-                const mins = minutesRestantes % 60;
-                const tempsTexte =
-                  heures > 0 ? `${heures}h ${mins}min` : `${mins} min`;
-                const distKm = (distanceRestanteMetres / 1000).toFixed(1);
-
-                // Mise à jour visuelle en direct
-                const etaValueEl = document.getElementById("eta-value");
-                if (etaValueEl) {
-                  etaValueEl.textContent = `${tempsTexte} (${distKm} km)`;
-                }
-              }
+            if (distVersInst <= 35) {
+              annoncerTexte(inst.text);
+              indexInstructionActuelle++;
             }
-
-            // --- 2. CALCUL DE L'ORIENTATION (CAP) ---
-            if (distanceParcourue > 0.5) {
-              // Uniquement si on a vraiment bougé d'un demi-mètre
-              let angle = Math.atan2(dLon, dLat) * (180 / Math.PI);
-              dernierCap = (angle + 360) % 360;
-            }
-          }
-
-          // --- 3. RECALCUL AUTOMATIQUE SI HORS ITINÉRAIRE ---
-          if (
-            destinationActuelle &&
-            typeof routeCoordinates !== "undefined" &&
-            routeCoordinates.length > 0 &&
-            !recalculEnCours
-          ) {
-            let distanceMin = Infinity;
-            // On vérifie la distance de la voiture avec la ligne bleue (un point sur 5 pour la performance)
-            for (let i = 0; i < routeCoordinates.length; i += 5) {
-              let d = calculerDistance(
-                latitude,
-                longitude,
-                routeCoordinates[i].lat,
-                routeCoordinates[i].lng,
-              );
-              if (d < distanceMin) distanceMin = d;
-            }
-
-            // Si la voiture s'éloigne de plus de 150 mètres des points du tracé -> Recalcul !
-            if (distanceMin > 150) {
-              console.log("Hors itinéraire ! Recalcul en cours en silence...");
-              recalculEnCours = true;
-
-              tracerItineraire(
-                L.latLng(latitude, longitude),
-                destinationActuelle,
-              );
-
-              // On bloque les autres recalculs pendant 10 secondes pour laisser le temps au réseau
-              setTimeout(() => {
-                recalculEnCours = false;
-              }, 10000);
-            }
-            // --- 4. ARRÊT AUTOMATIQUE À L'ARRIVÉE ---
-            if (destinationActuelle && !recalculEnCours) {
-              const distanceFinale = calculerDistance(
-                latitude,
-                longitude,
-                destinationActuelle.lat,
-                destinationActuelle.lng,
-              );
-
-              // Si on est à 50 mètres ou moins du point d'arrivée
-              if (distanceFinale <= 50) {
-                console.log("Arrivée à destination ! Coupure du GPS.");
-                annoncerTexte(
-                  "Vous êtes arrivé à destination. Fin du guidage.",
-                );
-                arreterGuidage();
-
-                destinationActuelle = null;
-              }
-            }
-          }
-
-          // On mémorise la position pour le prochain calcul
-          derniereLat = latitude;
-          derniereLon = longitude;
-
-          if (!userMarker) {
-            userMarker = L.marker([latitude, longitude], {
-              icon: carIcon,
-            }).addTo(map);
-          } else {
-            userMarker.setLatLng([latitude, longitude]);
-          }
-
-          if (userMarker._icon) {
-            userMarker._icon.style.transformOrigin = "center center";
-            const baseTransform = userMarker._icon.style.transform.replace(
-              /rotateZ\(.*?\)/g,
-              "",
-            );
-            // On applique l'angle calculé en direct pendant que tu roules
-            userMarker._icon.style.transform = `${baseTransform} rotateZ(${dernierCap}deg)`;
           }
         }
 
@@ -789,40 +779,13 @@ function demarrerGPS() {
               latitude,
               longitude,
               radar.lat,
-              radar.lon,
+              radar.lon
             );
             if (distance < plusProcheDistance) {
               plusProcheDistance = distance;
               radarConcerne = radar;
             }
           });
-
-          // --- GUIDAGE VOCAL CONTINU EN TEMPS RÉEL ---
-          if (
-            instructionsActuelles.length > 0 &&
-            indexInstructionActuelle < instructionsActuelles.length
-          ) {
-            const inst = instructionsActuelles[indexInstructionActuelle];
-            const coordIndex = inst.index; // Position exacte du virage sur la ligne
-
-            if (routeCoordinates && routeCoordinates[coordIndex]) {
-              const targetPoint = routeCoordinates[coordIndex];
-              // On calcule la distance entre la voiture et le prochain virage
-              const distVersInstruction = calculerDistance(
-                latitude,
-                longitude,
-                targetPoint.lat,
-                targetPoint.lng,
-              );
-
-              // Si la voiture arrive à moins de 35 mètres de l'instruction
-              if (distVersInstruction <= 35) {
-                const texteFr = traduireInstruction(inst.text);
-                annoncerTexte(texteFr);
-                indexInstructionActuelle++; // On passe à l'instruction suivante
-              }
-            }
-          }
 
           const distanceArrondie = Math.round(plusProcheDistance);
 
@@ -847,27 +810,22 @@ function demarrerGPS() {
             if (alertText)
               alertText.textContent = `⚠️ ${radarConcerne.nom} à ${formatDistance(distanceArrondie)} (Lim. ${radarConcerne.vitesseLimite} km/h)`;
 
-            // --- NOUVEAU : ALERTE DE SURVITESSE ---
             const limiteVitesse = parseInt(radarConcerne.vitesseLimite);
             let limiteToleree = limiteVitesse;
 
-            // Calcul de la marge
             if (toleranceActive === "5") limiteToleree += 5;
             if (toleranceActive === "10") limiteToleree += limiteVitesse * 0.1;
 
             if (!isNaN(limiteVitesse) && vitesseKmH > limiteToleree) {
-              // Survitesse détectée
-              if (currentSpeedEl) currentSpeedEl.style.color = "#e74c3c"; // Texte en rouge
-              if (speedGauge) speedGauge.style.stroke = "#e74c3c"; // Jauge en rouge écarlate
+              if (currentSpeedEl) currentSpeedEl.style.color = "#e74c3c";
+              if (speedGauge) speedGauge.style.stroke = "#e74c3c";
             } else {
-              // Vitesse normale
               if (currentSpeedEl) currentSpeedEl.style.color = "white";
               if (speedGauge) {
-                // Si on est à moins de 5 km/h de la limite, jauge jaune d'avertissement, sinon verte
                 if (!isNaN(limiteVitesse) && vitesseKmH >= limiteVitesse - 5) {
-                  speedGauge.style.stroke = "#f1c40f"; // Jaune
+                  speedGauge.style.stroke = "#f1c40f";
                 } else {
-                  speedGauge.style.stroke = "#27ae60"; // Vert
+                  speedGauge.style.stroke = "#27ae60";
                 }
               }
             }
@@ -897,8 +855,8 @@ function demarrerGPS() {
       {
         enableHighAccuracy: true,
         maximumAge: 0,
-        timeout: 10000,
-      },
+        timeout: 10000
+      }
     );
   }
 }
@@ -909,69 +867,10 @@ function lancerFavori(lat, lng) {
     alert("Veuillez d'abord lancer le GPS (Activer le GPS & l'Audio).");
     return;
   }
-  const destination = { lat: lat, lng: lng };
-  tracerItineraire(userMarker.getLatLng(), destination);
+  const pos = userMarker.getLngLat();
+  tracerItineraire({ lat: pos.lat, lng: pos.lng }, { lat: lat, lng: lng });
 }
 
-function traduireInstruction(texte) {
-  let t = texte;
-  t = t.replace(/Head north/gi, "Cap au nord");
-  t = t.replace(/Head south/gi, "Cap au sud");
-  t = t.replace(/Head east/gi, "Cap à l'est");
-  t = t.replace(/Head west/gi, "Cap à l'ouest");
-  t = t.replace(/Turn sharp right/gi, "Tournez franchement à droite");
-  t = t.replace(/Turn sharp left/gi, "Tournez franchement à gauche");
-  t = t.replace(/Turn slight right/gi, "Légère courbe à droite");
-  t = t.replace(/Turn slight left/gi, "Légère courbe à gauche");
-  t = t.replace(/Turn right/gi, "Tournez à droite");
-  t = t.replace(/Turn left/gi, "Tournez à gauche");
-  t = t.replace(/Make a slight right/gi, "Faites un léger virage à droite");
-  t = t.replace(/Make a slight left/gi, "Faites un léger virage à gauche");
-  t = t.replace(
-    /Take the ramp on the right/gi,
-    "Prenez la bretelle sur la droite",
-  );
-  t = t.replace(
-    /Take the ramp on the left/gi,
-    "Prenez la bretelle sur la gauche",
-  );
-  t = t.replace(/Take the ramp/gi, "Prenez la bretelle");
-  t = t.replace(/Take the exit/gi, "Prenez la sortie");
-  t = t.replace(/Merge onto/gi, "Rejoignez");
-  t = t.replace(/Merge left/gi, "Serrez à gauche");
-  t = t.replace(/Merge right/gi, "Serrez à droite");
-  t = t.replace(/Continue straight/gi, "Continuez tout droit");
-  t = t.replace(/Keep right/gi, "Restez à droite");
-  t = t.replace(/Keep left/gi, "Restez à gauche");
-  t = t.replace(
-    /Enter the traffic circle and take the 1st exit/gi,
-    "Entrez dans le rond-point et prenez la 1ère sortie",
-  );
-  t = t.replace(
-    /Enter the traffic circle and take the 2nd exit/gi,
-    "Entrez dans le rond-point et prenez la 2ème sortie",
-  );
-  t = t.replace(
-    /Enter the traffic circle and take the 3rd exit/gi,
-    "Entrez dans le rond-point et prenez la 3ème sortie",
-  );
-  t = t.replace(
-    /Enter the traffic circle and take the 4th exit/gi,
-    "Entrez dans le rond-point et prenez la 4ème sortie",
-  );
-  t = t.replace(/Enter the traffic circle/gi, "Entrez dans le rond-point");
-  t = t.replace(/At the traffic circle/gi, "Au rond-point");
-  t = t.replace(/At the end of the road/gi, "Au bout de la route");
-  t = t.replace(/onto/gi, "sur");
-  t = t.replace(/towards/gi, "vers");
-  t = t.replace(
-    /You have arrived at your destination/gi,
-    "Arrivée à destination",
-  );
-  return t;
-}
-
-// --- 8. GESTION DES FAVORIS (LOCALSTORAGE) ---
 function chargerFavorisStorage() {
   const favorisStorage = JSON.parse(localStorage.getItem("favoris_gps")) || [];
   const favContainer = document.getElementById("favorites-bar");
@@ -980,7 +879,7 @@ function chargerFavorisStorage() {
   favorisStorage.forEach((fav) => {
     const btn = document.createElement("button");
     btn.textContent = `⭐ ${fav.nom}`;
-    btn.style.margin = "5px"; // À ajuster selon ton CSS existant
+    btn.style.margin = "5px";
     btn.onclick = () => lancerFavori(fav.lat, fav.lng);
     favContainer.appendChild(btn);
   });
@@ -988,90 +887,68 @@ function chargerFavorisStorage() {
 
 function ajouterFavoriActuel(nomPersonnalise) {
   if (!destinationActuelle) {
-    alert(
-      "Veuillez d'abord calculer un itinéraire vers la destination à sauvegarder.",
-    );
+    alert("Veuillez d'abord calculer un itinéraire vers la destination à sauvegarder.");
     return;
   }
   const favorisStorage = JSON.parse(localStorage.getItem("favoris_gps")) || [];
   favorisStorage.push({
     nom: nomPersonnalise,
     lat: destinationActuelle.lat,
-    lng: destinationActuelle.lng,
+    lng: destinationActuelle.lng
   });
   localStorage.setItem("favoris_gps", JSON.stringify(favorisStorage));
-  alert(
-    `Favori "${nomPersonnalise}" sauvegardé avec succès ! Rechargez la page pour l'afficher.`,
-  );
+  alert(`Favori "${nomPersonnalise}" sauvegardé avec succès ! Rechargez la page pour l'afficher.`);
 }
 
-// --- NOUVELLE BARRE DE RECHERCHE PERSONNALISÉE (MAPBOX) ---
+// --- 8. RECHERCHE PERSONNALISÉE MAPBOX AUTOCOMPLETE ---
 const searchInput = document.getElementById("custom-search-input");
 const searchResults = document.getElementById("custom-search-results");
 let searchTimeout = null;
 
 if (searchInput) {
   searchInput.addEventListener("input", function () {
-    clearTimeout(searchTimeout); // Évite de faire une requête à chaque lettre tapée
+    clearTimeout(searchTimeout);
     const query = this.value;
 
     if (query.length < 3) {
-      searchResults.style.display = "none";
+      if (searchResults) searchResults.style.display = "none";
       return;
     }
 
-    // On attend 300ms après la dernière frappe pour lancer la recherche
     searchTimeout = setTimeout(() => {
-      // On réutilise ton token Mapbox existant
-      const mapboxToken =
-        "pk.eyJ1IjoiZ3JlZ29yeWJvZWhtYmVsaW4iLCJhIjoiY21zdHR6b2lmMGt5bzJ3cXV2ZXpoZW14dSJ9.tsmUFMuFvJpUDalG3GY3zQ";
-
-      // Appel à l'API Mapbox (restreint à la France pour plus de précision)
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=fr&language=fr&autocomplete=true&limit=5`;
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&country=fr&language=fr&autocomplete=true&limit=5`;
 
       fetch(url)
         .then((response) => response.json())
         .then((data) => {
+          if (!searchResults) return;
           searchResults.innerHTML = "";
           if (data.features && data.features.length > 0) {
             searchResults.style.display = "block";
 
             data.features.forEach((feature) => {
               const li = document.createElement("li");
-              li.textContent = feature.place_name_fr; // Adresse complète formatée
+              li.textContent = feature.place_name_fr;
               li.style.padding = "12px 18px";
               li.style.borderBottom = "1px solid #f0f0f0";
               li.style.cursor = "pointer";
               li.style.fontSize = "15px";
               li.style.color = "#333";
 
-              // Effet de survol
-              li.addEventListener(
-                "mouseover",
-                () => (li.style.backgroundColor = "#f9f9f9"),
-              );
-              li.addEventListener(
-                "mouseout",
-                () => (li.style.backgroundColor = "transparent"),
-              );
+              li.addEventListener("mouseover", () => (li.style.backgroundColor = "#f9f9f9"));
+              li.addEventListener("mouseout", () => (li.style.backgroundColor = "transparent"));
 
-              // Clic sur une adresse
               li.addEventListener("click", () => {
                 if (!userMarker) {
-                  alert(
-                    "Veuillez d'abord lancer le GPS (Activer le GPS) pour définir votre point de départ.",
-                  );
+                  alert("Veuillez d'abord lancer le GPS (Activer le GPS) pour définir votre point de départ.");
                   return;
                 }
-                const [lng, lat] = feature.center; // Mapbox renvoie [Longitude, Latitude]
-                searchInput.value = feature.place_name_fr; // Remplit la barre avec l'adresse choisie
-                searchResults.style.display = "none"; // Cache la liste
+                const [lng, lat] = feature.center;
+                searchInput.value = feature.place_name_fr;
+                searchResults.style.display = "none";
 
-                // Lancement de l'itinéraire
-                tracerItineraire(userMarker.getLatLng(), {
-                  lat: lat,
-                  lng: lng,
-                });
+                const pos = userMarker.getLngLat();
+                tracerItineraire({ lat: pos.lat, lng: pos.lng }, { lat: lat, lng: lng });
               });
 
               searchResults.appendChild(li);
@@ -1084,10 +961,70 @@ if (searchInput) {
     }, 300);
   });
 
-  // Fermer la liste déroulante si on clique n'importe où ailleurs sur la carte
   document.addEventListener("click", (e) => {
     if (e.target !== searchInput && e.target !== searchResults) {
-      searchResults.style.display = "none";
+      if (searchResults) searchResults.style.display = "none";
     }
+  });
+}
+
+// --- 9. CONTRÔLEUR DE MUSIQUE (MEDIA SESSION API) ---
+const playPauseBtn = document.getElementById("music-play-pause");
+const prevBtn = document.getElementById("music-prev");
+const nextBtn = document.getElementById("music-next");
+
+let isPlaying = false;
+
+if (playPauseBtn) {
+  playPauseBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      if (navigator.mediaSession.playbackState === "playing") {
+        navigator.mediaSession.playbackState = "paused";
+        playPauseBtn.textContent = "▶️";
+        isPlaying = false;
+      } else {
+        navigator.mediaSession.playbackState = "playing";
+        playPauseBtn.textContent = "⏸️";
+        isPlaying = true;
+      }
+    } else {
+      isPlaying = !isPlaying;
+      playPauseBtn.textContent = isPlaying ? "⏸️" : "▶️";
+    }
+  });
+}
+
+if (prevBtn) {
+  prevBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      try {
+        if (navigator.mediaSession.setPositionState) navigator.mediaSession.setPositionState();
+      } catch (e) {
+        console.log("Erreur MediaSession Prev:", e);
+      }
+    }
+  });
+}
+
+if (nextBtn) {
+  nextBtn.addEventListener("click", () => {
+    if ("mediaSession" in navigator) {
+      try {
+        console.log("Action : Morceau suivant");
+      } catch (e) {
+        console.log("Erreur MediaSession Next:", e);
+      }
+    }
+  });
+}
+
+if ("mediaSession" in navigator) {
+  navigator.mediaSession.setActionHandler("play", function () {
+    isPlaying = true;
+    if (playPauseBtn) playPauseBtn.textContent = "⏸️";
+  });
+  navigator.mediaSession.setActionHandler("pause", function () {
+    isPlaying = false;
+    if (playPauseBtn) playPauseBtn.textContent = "▶️";
   });
 }
