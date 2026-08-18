@@ -395,14 +395,26 @@ body.nav-active #main-header {
   width: 95% !important;
   max-width: 600px !important;
   padding: 6px 12px !important;
-  background-color: rgba(30, 39, 46, 0.3) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter:blur(8px) !important;
+  
+  /* --- MAGIE DU LIQUID GLASS --- */
+  /* Fond légèrement plus sombre/bleuté pour faire ressortir le texte blanc */
+  background-color: rgba(15, 20, 30, 0.45) !important; 
+  
+  /* Flou doublé et saturation augmentée pour raviver les couleurs de la carte */
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  
   border-radius: 14px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  
+  /* Bordure subtile pour accrocher la lumière (indispensable pour l'effet verre) */
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  
+  /* Ombre douce pour décoller l'élément de la carte */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25) !important;
+  
   z-index: 1000 !important;
 }
+
 
 body.nav-active .dashboard {
   display: flex !important;
