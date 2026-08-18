@@ -416,14 +416,6 @@ body.nav-active #main-header {
 }
 
 
-body.nav-active .dashboard {
-  display: flex !important;
-  justify-content: space-around !important;
-  align-items: center !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
 /* --- ADAPTATION MODE PAYSAGE (LANDSCAPE) --- */
 @media screen and (orientation: landscape) {
   /* Réduire la taille du panneau supérieur */
