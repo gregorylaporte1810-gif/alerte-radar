@@ -44,6 +44,10 @@ let heureArriveeEstimee = null;
 let distanceRestanteMetres = 0;
 let recalculEnCours = false;
 let suiviAutoActif = true;
+let radarsProches = []; // Ne contiendra que les radars dans un rayon de 20 km
+let derniereLatMajRadars = null;
+let derniereLonMajRadars = null;
+
 
 // --- 2. FONCTIONS D'ITINÉRAIRE & NAVIGATION ---
 
@@ -546,6 +550,29 @@ function calculerDistance(lat1, lon1, lat2, lon2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+// Filtre la base de données pour ne garder que les radars autour de l'utilisateur
+function mettreAJourRadarsProches(userLat, userLon) {
+  // On filtre pour ne garder que les radars à moins de 20 km (20000 mètres)
+  radarsProches = radarsDatabase.filter((radar) => {
+    // 🚀 OPTIMISATION EXTRÊME : Filtre "carré" rapide avant le calcul précis
+    // 1 degré de latitude vaut environ 111 km. 0.2 degré = ~22 km.
+    const dLat = Math.abs(radar.lat - userLat);
+    const dLon = Math.abs(radar.lon - userLon);
+    
+    // Si le radar est à plus de ~22km de base, on l'ignore sans faire le calcul complexe
+    if (dLat > 0.2 || dLon > 0.2) return false;
+    
+    // Si le radar est dans le carré proche, on fait le vrai calcul précis de Haversine
+    const dist = calculerDistance(userLat, userLon, radar.lat, radar.lon);
+    return dist <= 20000;
+  });
+  
+  derniereLatMajRadars = userLat;
+  derniereLonMajRadars = userLon;
+  console.log(`[Optimisation] Zone radar mise à jour : ${radarsProches.length} radars surveillés.`);
+}
+
 // Calcule la vraie distance par rapport au tracé de la route
 function distancePointSegment(lat, lon, lat1, lon1, lat2, lon2) {
   const R = 6371e3;
@@ -749,15 +776,37 @@ function demarrerGPS() {
           }
         }
 
-        derniereLat = latitude;
+                derniereLat = latitude;
         derniereLon = longitude;
+
+        // --- 🚀 NOUVEAU : MISE À JOUR INTELLIGENTE DE LA ZONE RADAR ---
+        let distanceDepuisMajRadars = 999999;
+        if (derniereLatMajRadars !== null && derniereLonMajRadars !== null) {
+          distanceDepuisMajRadars = calculerDistance(latitude, longitude, derniereLatMajRadars, derniereLonMajRadars);
+        }
+        
+        // Si on a bougé de plus de 5 km (5000m) depuis le dernier scan, on rafraîchit le secteur
+        if (distanceDepuisMajRadars > 5000 && radarsDatabase.length > 0) {
+          mettreAJourRadarsProches(latitude, longitude);
+        }
+
+        // --- CAMÉRA 3D COCKPIT EN TEMPS RÉEL ---
+        if (suiviAutoActif && map) {
+          map.easeTo({
+            center: [longitude, latitude],
+            zoom: 17,
+            pitch: 60,
+            bearing: dernierCap,
+            duration: 900, // 🔧 RÉDUIT À 900ms : Supprime les saccades en se calant sous la seconde
+            easing: (t) => t, 
+          });
+        }
 
         if (!userMarker) {
           userCarElement = document.createElement("div");
           userCarElement.style.width = "40px";
           userCarElement.style.height = "40px";
-          userCarElement.style.backgroundImage =
-            "url('voiture-removebg-preview.png')";
+          userCarElement.style.backgroundImage = "url('voiture-removebg-preview.png')";
           userCarElement.style.backgroundSize = "contain";
           userCarElement.style.backgroundRepeat = "no-repeat";
           userCarElement.style.backgroundPosition = "center";
@@ -792,18 +841,13 @@ function demarrerGPS() {
           }
         }
 
-        // --- DANS LA BOUCLE DE TRAITEMENT DES RADARS DE app.js ---
-        if (radarsDatabase.length > 0) {
+        // --- 🚀 BOUCLE OPTIMISÉE DES RADARS (Utilise radarsProches) ---
+        if (radarsProches.length > 0) { // <--- Changement ici
           let plusProcheDistance = 999999;
           let radarConcerne = { nom: "Aucun", vitesseLimite: "--" };
 
-          radarsDatabase.forEach((radar) => {
-            const distance = calculerDistance(
-              latitude,
-              longitude,
-              radar.lat,
-              radar.lon,
-            );
+          radarsProches.forEach((radar) => { // <--- Changement ici
+            const distance = calculerDistance(latitude, longitude, radar.lat, radar.lon);
             if (distance < plusProcheDistance) {
               plusProcheDistance = distance;
               radarConcerne = radar;
@@ -826,10 +870,7 @@ function demarrerGPS() {
           }
 
           if (nextCameraDistEl) {
-            nextCameraDistEl.textContent =
-              distanceArrondie > 99999
-                ? "Calcul..."
-                : formatDistance(distanceArrondie);
+            nextCameraDistEl.textContent = distanceArrondie > 99999 ? "Calcul..." : formatDistance(distanceArrondie);
           }
 
           const headerEl = document.getElementById("main-header");
@@ -876,6 +917,7 @@ function demarrerGPS() {
             }
           }
         }
+
       },
       (error) => {
         console.warn(`Erreur GPS: ${error.message}`);
