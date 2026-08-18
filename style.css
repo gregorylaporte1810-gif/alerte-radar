@@ -233,9 +233,25 @@ body.dark-mode #custom-search-results {
   border-color: #333 !important;
 }
 
-body.dark-mode #main-header {
-  background-color: #2c3e50 !important;
+/* --- ADAPTATION DU LIQUID GLASS POUR LE MODE NUIT --- */
+body.dark-mode #main-header,
+body.dark-mode.nav-active #main-header {
+  background-color: rgba(5, 8, 15, 0.25) !important; 
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
 }
+
+/* Application du même effet pour la pilule de navigation en mode nuit */
+body.dark-mode #navigation-controls {
+  background-color: rgba(5, 8, 15, 0.25) !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6) !important;
+}
+
 
 /* --- OPTIMISATIONS EXTRÊMES POUR ÉCRANS MOBILES / PAYSAGE --- */
 @media (max-width: 1000px) {
