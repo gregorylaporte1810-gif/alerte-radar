@@ -711,18 +711,7 @@ function demarrerGPS() {
           }
         }
 
-        // --- CAMÉRA 3D COCKPIT EN TEMPS RÉEL ---
-        if (suiviAutoActif && map) {
-          map.easeTo({
-            center: [longitude, latitude],
-            zoom: 17,
-            pitch: 60,
-            bearing: dernierCap,
-            duration: 1000, // Synchronisé avec la vitesse de rafraîchissement du GPS
-            easing: (t) => t, // Mouvement linéaire pur (supprime l'effet élastique)
-          });
-        }
-
+       
         // --- RECALCUL SI HORS ITINÉRAIRE ---
         if (
           destinationActuelle &&
